@@ -96,6 +96,15 @@ a{color:var(--accent)}
 .pbub{background:rgba(255,255,255,.94);color:#2a1f2b;padding:9px 13px;border-radius:18px;border-bottom-left-radius:6px;max-width:78%;font-size:14px;box-shadow:0 6px 20px rgba(40,10,40,.25);animation:rise .5s ease}
 @keyframes rise{from{transform:translateY(6px);opacity:.4}}
 .setup.editing .hero{display:none}
+.av,.pav,.avbig{background-size:cover;background-position:center}
+.avpick{display:flex;gap:16px;align-items:center}
+.avbig{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:34px;color:#fff;flex:none;box-shadow:var(--shadow)}
+.avbtns{display:flex;flex-direction:column;gap:8px;min-width:0}
+.upl{border:0;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:9px 14px;font-weight:600;text-align:center;cursor:pointer}
+.ghost.sm{padding:7px 12px;font-size:13px;border-radius:12px}
+.row.him{flex-direction:row;align-items:flex-start;gap:8px}
+.row.him>.col{display:flex;flex-direction:column;min-width:0}
+.mav{width:30px;height:30px;border-radius:50%;flex:none;background-size:cover;background-position:center;display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:800;font-size:13px;margin-top:2px}
 .setup h1{font-family:var(--display);font-weight:800;font-size:28px;margin:0;text-wrap:balance}
 .setup h2{font-family:var(--display);font-size:18px;margin:8px 0 -6px}
 .setup p.lead{margin:-8px 0 0;color:var(--muted)}
@@ -164,7 +173,19 @@ input[type=range]{accent-color:var(--accent);width:100%}
 
     <div class="field"><span class="lab">说话方式</span><div class="chips" id="langs"></div></div>
     <div class="field"><span class="lab">关系阶段</span><div class="chips" id="stages"></div></div>
-    <div class="field"><span class="lab">头像颜色</span><div class="colors" id="colors"></div></div>
+    <div class="field"><span class="lab">他的头像</span>
+      <div class="avpick">
+        <div class="avbig" id="avBig"></div>
+        <div class="avbtns">
+          <label class="upl" for="f-photo">上传照片</label>
+          <input type="file" id="f-photo" accept="image/*" hidden>
+          <button type="button" class="ghost sm" id="avStar">用星空侧脸</button>
+          <button type="button" class="ghost sm" id="avNone">不用照片</button>
+        </div>
+      </div>
+      <span class="lab" id="colorLab">没有照片时的颜色</span><div class="colors" id="colors"></div>
+      <p class="note" style="text-align:left;padding:0">可以用即梦或其他 AI 做一张帅哥照片，存到手机再上传。照片只存在你的手机里。</p>
+    </div>
 
     <div class="field"><label for="f-voice">他的声音</label>
       <select id="f-voice">
@@ -292,8 +313,19 @@ function chipGroup(el,map,key,onPick){
     b.setAttribute("aria-pressed",draft[key]===k);b.onclick=()=>{draft[key]=k;chipGroup(el,map,key,onPick);onPick&&onPick()};el.append(b)}
 }
 const SAMPLE={bad:"今天穿那么好看，是想给谁看？",toxic:"又熬夜？黑眼圈都快掉到下巴了。…去睡。",ceo:"吃饭。吃完拍照给我。",puppy:"姐姐～你今天有没有想我呀 🥺",uncle:"辛苦了。今天先别想太多，好好吃顿饭。",sunny:"刚看到超美的晚霞！第一个就想发给你 🌇"};
+function paintAv(el,photo,color,name){
+  if(photo){el.style.backgroundImage="url("+photo+")";el.style.backgroundColor="transparent";el.textContent=""}
+  else{el.style.backgroundImage="";el.style.backgroundColor=color;el.textContent=(name||"他").slice(0,1)}
+}
+function resizeImg(file,size){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=c.height=size;
+  const s=Math.min(img.width,img.height);c.getContext("2d").drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,size,size);URL.revokeObjectURL(img.src);res(c.toDataURL("image/jpeg",.85))};
+  img.onerror=()=>rej(new Error("这张图片打不开，换一张试试。"));img.src=URL.createObjectURL(file)})}
+$("f-photo").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{draft.photo=await resizeImg(f,320);renderSetup()}catch(err){$("setupErr").textContent=err.message;$("setupErr").hidden=false}e.target.value=""};
+$("avStar").onclick=async()=>{try{const b=await (await fetch("icons/icon-512-v3.png")).blob();draft.photo=await resizeImg(b,320);renderSetup()}catch(e){}};
+$("avNone").onclick=()=>{draft.photo="";renderSetup()};
 function renderPreview(){
-  const n=$("f-name").value.trim();$("pAv").textContent=n?n.slice(0,1):"他";$("pAv").style.background=draft.color;
+  const n=$("f-name").value.trim();paintAv($("pAv"),draft.photo,draft.color,n);paintAv($("avBig"),draft.photo,draft.color,n);
+  $("colorLab").hidden=$("colors").hidden=!!draft.photo;$("avNone").hidden=!draft.photo;
   const b=$("pBub"),t=SAMPLE[draft.type]||"";if(b.textContent!==t){b.textContent=t;b.style.animation="none";b.offsetWidth;b.style.animation=""}
 }
 $("f-name").addEventListener("input",renderPreview);
@@ -320,7 +352,7 @@ function renderSetup(){
 $("f-bad").oninput=e=>$("badv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
-  if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
+  if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
   $("f-key").value=CFG.key||"";fillModels();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
@@ -487,6 +519,8 @@ function bubble(m){
     if(m.caption){const c=document.createElement("div");c.className="bub cap";c.textContent=m.caption;row.append(c)}
   }else{const b=document.createElement("div");b.className="bub";b.textContent=m.text;row.append(b)}
   const tm=document.createElement("div");tm.className="time";tm.textContent=fmtTime(m.ts);row.append(tm);
+  if(m.from!=="me"){const col=document.createElement("div");col.className="col";while(row.firstChild)col.append(row.firstChild);
+    const av=document.createElement("div");av.className="mav";const p=S.profile;paintAv(av,p.photo,p.color,p.name);row.append(av,col)}
   return row;
 }
 function renderThread(){
@@ -506,7 +540,7 @@ function showTyping(on){
 function showNote(t,isErr){const n=$("aiNote");n.textContent=t||"";n.hidden=!t;n.className="note"+(isErr?" err":"")}
 function showChat(){
   const p=S.profile;$("setup").hidden=true;$("chatView").hidden=false;
-  $("hAv").style.background=p.color;$("hAv").textContent=p.name.slice(0,1);$("hName").textContent=p.name;
+  paintAv($("hAv"),p.photo,p.color,p.name);$("hName").textContent=p.name;
   renderThread();resetIdle();
 }
 
