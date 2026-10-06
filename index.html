@@ -213,13 +213,13 @@ input[type=range]{accent-color:var(--accent);width:100%}
       <label for="f-arkkey">豆包 API key（BytePlus）</label>
       <input type="password" id="f-arkkey" autocomplete="off" placeholder="贴上 BytePlus ModelArk 的 API key">
       <label for="f-arkmodel">豆包模型 ID</label>
-      <input type="text" id="f-arkmodel" autocomplete="off" placeholder="seed-1-6-flash-250615">
+      <input type="text" id="f-arkmodel" autocomplete="off" placeholder="dola-seed-2-1-turbo-260628">
       <div class="help">拿豆包 key：
         <ol>
           <li>打开 <a href="https://console.byteplus.com/ark" target="_blank" rel="noopener">console.byteplus.com/ark</a>，注册并登录</li>
-          <li>左边菜单 <b>Model activation</b>：开通 <b>seed-1.6-flash</b>（新用户有免费额度）</li>
+          <li>左边菜单 <b>Model activation</b>：开通 <b>Dola-Seed-2.1-turbo</b>（新用户有免费额度）</li>
           <li>左边菜单 <b>API keys</b> → <b>Create API key</b>，复制贴到上面</li>
-          <li>模型 ID 照开通页面显示的填，例如 <b>seed-1-6-flash-250615</b></li>
+          <li>模型 ID 照开通页面显示的填，例如 <b>dola-seed-2-1-turbo-260628</b></li>
         </ol>
         建议在后台打开「只用免费额度」（Free tokens only），避免超额扣钱。
       </div>
@@ -375,7 +375,7 @@ function openSetup(){
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
 function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;
-  CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"seed-1-6-flash-250615";store(KKEY,CFG)}
+  CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"dola-seed-2-1-turbo-260628";store(KKEY,CFG)}
 const PROVS={gemini:"Gemini（免费）",ark:"豆包（比较稳定）"};
 function renderProv(){const el=$("provs");el.innerHTML="";const cur=CFG.provider||"gemini";
   for(const k in PROVS){const b=document.createElement("button");b.type="button";b.textContent=PROVS[k];b.setAttribute("aria-pressed",cur===k);b.onclick=()=>{readCfg();CFG.provider=k;store(KKEY,CFG);renderProv()};el.append(b)}
@@ -384,7 +384,7 @@ function hasChatKey(){return (CFG.provider==="ark")?!!CFG.arkKey:!!CFG.key}
 async function chatAI(system,text,opts={}){return CFG.provider==="ark"?ark(system,text,opts):gemini(system,text,opts)}
 async function ark(system,text,{max=500}={},noThink=true){
   if(!CFG.arkKey)throw new Error("还没有设定豆包 API key。");
-  const body={model:CFG.arkModel||"seed-1-6-flash-250615",messages:[{role:"system",content:system},{role:"user",content:text}],temperature:1,max_tokens:Math.max(max,800)};
+  const body={model:CFG.arkModel||"dola-seed-2-1-turbo-260628",messages:[{role:"system",content:system},{role:"user",content:text}],temperature:1,max_tokens:Math.max(max,800)};
   if(noThink)body.thinking={type:"disabled"};
   let r,data;
   for(let i=0;i<2;i++){
@@ -739,7 +739,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="12";
+const BUILD="13";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
