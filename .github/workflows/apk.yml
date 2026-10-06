@@ -47,11 +47,12 @@ jobs:
 
       - name: App icon and name
         run: |
+          pip install --quiet pillow
           cd app/android/app/src/main/res
           python3 - <<'PY'
-          from PIL import Image, ImageDraw
           import os, glob
-          src = Image.open("../../../../../../icons/icon-512-v3.png").convert("RGBA")
+          from PIL import Image, ImageDraw
+          src = Image.open(os.environ["GITHUB_WORKSPACE"]+"/icons/icon-512-v3.png").convert("RGBA")
           sizes = {"mdpi":48,"hdpi":72,"xhdpi":96,"xxhdpi":144,"xxxhdpi":192}
           fg_sizes = {"mdpi":108,"hdpi":162,"xhdpi":216,"xxhdpi":324,"xxxhdpi":432}
           for d,s in sizes.items():
