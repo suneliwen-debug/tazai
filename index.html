@@ -502,18 +502,43 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false}={}
 async function tts(text,voice){
   if(!CFG.key)throw new Error("no key");
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.tts||"gemini-2.5-flash-preview-tts"}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
-    body:JSON.stringify({contents:[{parts:[{text:"用标准普通话、年轻男生的声音，语气放松、温柔、带一点笑意，像男朋友在微信发语音，语速自然不要太慢：\n"+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
+    body:JSON.stringify({contents:[{parts:[{text:"用标准普通话、年轻男生的声音，语气放松、温柔、带一点笑意，像男朋友在微信发语音，语速自然不要太慢。说完这句话就停，后面保持安静：\n"+text.trim().replace(/[^。！？.!?~～]$/,"$&。")}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
   if(!r.ok)throw new Error("tts "+r.status);
-  const d=await r.json();const b64=d.candidates[0].content.parts.find(p=>p.inlineData).inlineData.data;
-  return pcmToWav(b64);
+  const d=await r.json();const parts=d.candidates[0].content.parts.filter(p=>p.inlineData);
+  const rate=+((parts[0].inlineData.mimeType||"").match(/rate=(\d+)/)||[])[1]||24000;
+  return pcmToWav(parts.map(p=>p.inlineData.data),rate);
 }
-function pcmToWav(b64){
-  const bin=atob(b64),n=bin.length,buf=new ArrayBuffer(44+n),v=new DataView(buf);
+function pcmToWav(chunks,rate){
+  // 合并成 16-bit 样本
+  const bins=chunks.map(c=>atob(c));let total=bins.reduce((a,b)=>a+(b.length>>1),0);
+  let pcm=new Int16Array(total),o=0;
+  for(const bin of bins){for(let i=0;i+1<bin.length;i+=2){let x=bin.charCodeAt(i)|(bin.charCodeAt(i+1)<<8);pcm[o++]=x>32767?x-65536:x}}
+  pcm=trimTail(pcm,rate);
+  const n=pcm.length*2,buf=new ArrayBuffer(44+n),v=new DataView(buf);
   const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
   w(0,"RIFF");v.setUint32(4,36+n,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
-  v.setUint32(24,24000,true);v.setUint32(28,48000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n,true);
-  const u=new Uint8Array(buf,44);for(let i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n,true);
+  new Int16Array(buf,44,pcm.length).set(pcm);
   return new Blob([buf],{type:"audio/wav"});
+}
+// 裁掉说完话后的杂音：找到「说完话后的一段长静音」就切掉后面的部分，再淡出
+function trimTail(pcm,rate){
+  const win=Math.round(rate*0.02),n=Math.floor(pcm.length/win);if(n<10)return pcm;
+  const rms=new Float32Array(n);
+  for(let k=0;k<n;k++){let s=0;for(let i=k*win;i<(k+1)*win;i++)s+=pcm[i]*pcm[i];rms[k]=Math.sqrt(s/win)}
+  const sorted=Array.from(rms).sort((a,b)=>a-b),peak=sorted[Math.floor(n*0.95)]||1;
+  const quiet=Math.max(peak*0.06,120),needQuiet=Math.round(0.55/0.02);
+  let lastLoud=-1,cut=n;
+  for(let k=0;k<n;k++){
+    if(rms[k]>quiet){lastLoud=k;continue}
+    if(lastLoud>=0&&k-lastLoud>=needQuiet&&lastLoud*0.02>0.8){cut=lastLoud+Math.round(0.18/0.02);break}
+  }
+  if(cut>=n){ // 没找到长静音：至少把最后的静音/低噪去掉
+    let k=n-1;while(k>0&&rms[k]<=quiet)k--;cut=Math.min(n,k+Math.round(0.18/0.02));
+  }
+  const end=Math.min(pcm.length,cut*win),out=pcm.slice(0,end),fade=Math.min(end,Math.round(rate*0.04));
+  for(let i=0;i<fade;i++)out[end-fade+i]=Math.round(out[end-fade+i]*(1-i/fade));
+  return out;
 }
 
 /* ---------- voice playback ---------- */
@@ -552,7 +577,7 @@ function bubble(m){
     b.innerHTML='<span class="play">▶</span><span class="wave"></span><span class="dur">'+secs+'″</span>';
     const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
     b.onclick=()=>{b.classList.add("loading");
-      playVoice("v"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
+      playVoice("v2-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
         ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
     row.append(b);
     const t=document.createElement("button");t.className="totext";t.type="button";t.textContent="转文字";
@@ -712,7 +737,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="10";
+const BUILD="11";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
