@@ -538,6 +538,13 @@ function trimTail(pcm,rate){
     if(lastSpeech>=0&&lastSpeech*0.02>0.6&&run>=runNeed){cut=lastSpeech+Math.round(0.08/0.02);break}
   }
   if(cut>=n){let k=n-1;while(k>0&&bad(k))k--;cut=Math.min(n,k+Math.round(0.15/0.02))}
+  // 第二层：结尾一段「音量几乎不变」的声音（嗡嗡/滋滋），人声不会这么平稳
+  {let k=cut-1;while(k>0&&rms[k]<=quiet)k--;const end=k;
+   if(end>15){const ref=[];for(let j=end;j>end-8;j--)ref.push(rms[j]);ref.sort((a,b)=>a-b);const med=ref[4]||1;
+     const zref=zcr[end];let j=end;
+     while(j>0&&rms[j]>med*0.55&&rms[j]<med*1.6&&Math.abs(zcr[j]-zref)<0.08)j--;
+     const len=(end-j)*0.02;
+     if(len>=0.22&&j*0.02>0.6)cut=Math.min(cut,j+Math.round(0.04/0.02));}}
   const end=Math.min(pcm.length,cut*win),out=pcm.slice(0,end),fade=Math.min(end,Math.round(rate*0.05));
   for(let i=0;i<fade;i++)out[end-fade+i]=Math.round(out[end-fade+i]*(1-i/fade));
   return out;
@@ -579,7 +586,7 @@ function bubble(m){
     b.innerHTML='<span class="play">▶</span><span class="wave"></span><span class="dur">'+secs+'″</span>';
     const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
     b.onclick=()=>{b.classList.add("loading");
-      playVoice("v3-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
+      playVoice("v4-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
         ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
     row.append(b);
     const t=document.createElement("button");t.className="totext";t.type="button";t.textContent="转文字";
@@ -739,7 +746,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="13";
+const BUILD="14";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
