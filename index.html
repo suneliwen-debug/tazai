@@ -208,7 +208,23 @@ input[type=range]{accent-color:var(--accent);width:100%}
     </div>
 
     <h2>AI 设定</h2>
-    <div class="field"><label for="f-key">Gemini API key</label>
+    <div class="field"><span class="lab">聊天用哪个 AI</span><div class="chips" id="provs"></div></div>
+    <div id="arkBox" class="field" hidden>
+      <label for="f-arkkey">豆包 API key（BytePlus）</label>
+      <input type="password" id="f-arkkey" autocomplete="off" placeholder="贴上 BytePlus ModelArk 的 API key">
+      <label for="f-arkmodel">豆包模型 ID</label>
+      <input type="text" id="f-arkmodel" autocomplete="off" placeholder="seed-1-6-flash-250615">
+      <div class="help">拿豆包 key：
+        <ol>
+          <li>打开 <a href="https://console.byteplus.com/ark" target="_blank" rel="noopener">console.byteplus.com/ark</a>，注册并登录</li>
+          <li>左边菜单 <b>Model activation</b>：开通 <b>seed-1.6-flash</b>（新用户有免费额度）</li>
+          <li>左边菜单 <b>API keys</b> → <b>Create API key</b>，复制贴到上面</li>
+          <li>模型 ID 照开通页面显示的填，例如 <b>seed-1-6-flash-250615</b></li>
+        </ol>
+        建议在后台打开「只用免费额度」（Free tokens only），避免超额扣钱。
+      </div>
+    </div>
+    <div class="field"><label for="f-key" id="gemLab">Gemini API key</label>
       <input type="password" id="f-key" autocomplete="off" placeholder="AIza…">
       <div class="help">免费拿 key：
         <ol>
@@ -353,17 +369,48 @@ $("f-bad").oninput=e=>$("badv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
-  $("f-key").value=CFG.key||"";fillModels();
+  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
-function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;store(KKEY,CFG)}
+function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;
+  CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"seed-1-6-flash-250615";store(KKEY,CFG)}
+const PROVS={gemini:"Gemini（免费）",ark:"豆包（比较稳定）"};
+function renderProv(){const el=$("provs");el.innerHTML="";const cur=CFG.provider||"gemini";
+  for(const k in PROVS){const b=document.createElement("button");b.type="button";b.textContent=PROVS[k];b.setAttribute("aria-pressed",cur===k);b.onclick=()=>{readCfg();CFG.provider=k;store(KKEY,CFG);renderProv()};el.append(b)}
+  $("arkBox").hidden=cur!=="ark";$("gemLab").textContent=cur==="ark"?"Gemini API key（用来发语音，可以不填）":"Gemini API key";}
+function hasChatKey(){return (CFG.provider==="ark")?!!CFG.arkKey:!!CFG.key}
+async function chatAI(system,text,opts={}){return CFG.provider==="ark"?ark(system,text,opts):gemini(system,text,opts)}
+async function ark(system,text,{max=500}={},noThink=true){
+  if(!CFG.arkKey)throw new Error("还没有设定豆包 API key。");
+  const body={model:CFG.arkModel||"seed-1-6-flash-250615",messages:[{role:"system",content:system},{role:"user",content:text}],temperature:1,max_tokens:Math.max(max,800)};
+  if(noThink)body.thinking={type:"disabled"};
+  let r,data;
+  for(let i=0;i<2;i++){
+    try{r=await fetch("https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.arkKey},body:JSON.stringify(body)})}
+    catch(e){throw new Error("连不上豆包。可能是网络问题，也可能是豆包不允许网页直接连接（这种情况跟 Claude 说，我改用 n8n 转接）。")}
+    data=await r.json().catch(()=>({}));
+    if(r.status>=500||r.status===429){if(i===0){await new Promise(x=>setTimeout(x,1500));continue}}
+    break;
+  }
+  if(!r.ok){const raw=(data&&data.error&&(data.error.message||data.error.code))||"";
+    if(noThink&&r.status===400&&/thinking/i.test(raw))return ark(system,text,{max},false);
+    const e=new Error(r.status===401?"豆包 API key 不对，去设定重新贴。":r.status===404?"豆包模型 ID 不对，或还没开通这个模型。":r.status===429?"豆包太多请求或额度用完了，等一下再试。":"豆包出错了。");
+    e.detail=r.status+" "+String(raw).slice(0,120);throw e}
+  const out=(data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||"";
+  if(!out)throw new Error("他想了想没说话，再发一次试试。");
+  const t=out.replace(/^```(?:json)?\s*|\s*```$/g,"");
+  try{return JSON.parse(t)}catch(e){const m=t.match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0])}catch(_){} return{messages:[{type:"text",text:t.slice(0,300)}]}}
+}
 $("cancelSetup").onclick=showChat;
 $("edit").onclick=openSetup;
 $("testKey").onclick=async()=>{
   readCfg();const m=$("keyMsg");m.hidden=false;m.className="";m.textContent="测试中…";
-  try{const chat=await discover();if(!chat)throw new Error("这个 key 找不到可以聊天的 Flash 模型。");
+  try{
+    if(CFG.provider==="ark"){await ark("你是测试助手。只回 JSON。",'回复 JSON：{"ok":true}',{max:20});m.className="ok";m.textContent="豆包可以用了 ✓ 模型："+CFG.arkModel;
+      if(CFG.key)discover().catch(()=>{});return}
+    const chat=await discover();if(!chat)throw new Error("这个 key 找不到可以聊天的 Flash 模型。");
     await gemini("你是测试助手。",'回复 JSON：{"ok":true}',{max:20});m.className="ok";m.textContent="可以用了 ✓ 模型："+CFG.model}
   catch(e){m.className="err";m.textContent=e.message+(e.detail?"（"+e.detail+"）":"")}
 };
@@ -371,10 +418,10 @@ $("save").onclick=()=>{
   const name=$("f-name").value.trim(),err=$("setupErr");
   readCfg();
   if(!name){err.textContent="先给他取个名字。";err.hidden=false;return}
-  if(!CFG.key){err.textContent="先贴上 Gemini API key，他才能回复你。";err.hidden=false;return}
+  if(!hasChatKey()){err.textContent=CFG.provider==="ark"?"先贴上豆包 API key，他才能回复你。":"先贴上 Gemini API key，他才能回复你。";err.hidden=false;return}
   err.hidden=true;
   const first=!S.profile;
-  if(!(CFG.models&&CFG.models.length))discover().catch(()=>{});
+  if(CFG.key&&!(CFG.models&&CFG.models.length))discover().catch(()=>{});
   S.profile={name,you:$("f-you").value.trim()||"宝贝",job:$("f-job").value.trim(),age:$("f-age").value,bad:+$("f-bad").value,voice:$("f-voice").value,...draft};
   if(first)S.lastSeen=Date.now();
   save();showChat();
@@ -595,7 +642,7 @@ async function deliver(list,opts={}){
 async function reply(){
   if(busy)return;busy=true;$("sendBtn").disabled=true;showTyping(true);showNote("");
   try{
-    const r=await gemini(persona(),`${nowLine()}\n最近聊天：\n${transcript(14)}\n\n回复她刚才的消息。${FORMAT}`);
+    const r=await chatAI(persona(),`${nowLine()}\n最近聊天：\n${transcript(14)}\n\n回复她刚才的消息。${FORMAT}`);
     remember(r);const list=clean(r.messages);
     showTyping(false);await deliver(list.length?list:[{type:"text",text:"嗯？"}]);
   }catch(e){showTyping(false);showNote(e.message+(e.detail?"\n（"+e.detail+"）":""),true)}
@@ -609,7 +656,7 @@ function pickAwayTime(gapMin){
   const pool=ok.slice(Math.floor(ok.length/2));return pool[Math.floor(Math.random()*pool.length)];
 }
 async function proactive(kind,gapMin){
-  if(busy||!S.profile||!CFG.key)return;busy=true;
+  if(busy||!S.profile||!hasChatKey())return;busy=true;
   let ask,awayTs=0;
   if(kind==="first")ask=`这是你们在这个 App 的第一条消息。你主动开场，符合“${STAGES[S.profile.stage]}”的关系，自然点，可以说说你现在在干嘛。`;
   else if(kind==="away"){
@@ -621,7 +668,7 @@ async function proactive(kind,gapMin){
   else ask=`她在线但安静了一会儿。你主动发 1 条：分享你此刻在做的事（可以发照片或语音），或按你的性格找她说话。`;
   try{
     if(kind!=="away")showTyping(true);
-    const r=await gemini(persona(),`${nowLine(awayTs)}\n最近聊天：\n${transcript(10)||"（还没有）"}\n\n${ask}\n${FORMAT}`);
+    const r=await chatAI(persona(),`${nowLine(awayTs)}\n最近聊天：\n${transcript(10)||"（还没有）"}\n\n${ask}\n${FORMAT}`);
     const list=clean(r.messages);showTyping(false);
     if(kind==="away")await deliver(list,{away:true,instant:true,ts:awayTs});else await deliver(list);
   }catch(e){showTyping(false);if(kind==="first")showNote(e.message,true)}
@@ -664,7 +711,7 @@ document.addEventListener("visibilitychange",()=>{
 });
 
 /* ---------- boot ---------- */
-if(S.profile&&CFG.key){showChat();checkAway()}else openSetup();
+if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
 </script>
