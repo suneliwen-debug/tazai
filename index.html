@@ -311,6 +311,7 @@ function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}ca
 let S=load(SKEY)||{profile:null,msgs:[],lastSeen:0,notes:[]};
 S.notes=S.notes||[];
 let CFG=load(KKEY)||{key:"",model:"gemini-flash-latest"};
+if(/^gemini-2\./.test(CFG.model||"")){CFG.models=[];CFG.model="gemini-flash-latest"}
 function save(){S.msgs=S.msgs.slice(-400);store(SKEY,S)}
 
 let busy=false, idleCount=0, idleTimer=null;
@@ -446,17 +447,19 @@ async function listModels(){
   if(!r.ok)throw new Error(friendlyErr(r.status,d&&d.error&&d.error.message||""));
   return (d.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes("generateContent")).map(m=>m.name.replace(/^models\//,""));
 }
+function ver(n){const m=n.match(/gemini-(\d+(?:\.\d+)?)/);return m?parseFloat(m[1]):0}
 function pickChat(names){
-  const ok=names.filter(n=>/flash/.test(n)&&!/(tts|image|live|audio|embed|robotics|thinking-exp|computer)/.test(n));
-  const pref=["gemini-flash-latest","gemini-3-flash","gemini-3-flash-preview","gemini-2.5-flash"];
-  for(const p of pref)if(ok.includes(p))return p;
-  const nonLite=ok.filter(n=>!/lite/.test(n)).sort().reverse();
-  return nonLite[0]||ok.sort().reverse()[0]||null;
+  const bad=CFG.bad||[];
+  const ok=names.filter(n=>/flash/.test(n)&&!bad.includes(n)&&!/(tts|image|live|audio|embed|robotics|thinking-exp|computer|native)/.test(n));
+  if(ok.includes("gemini-flash-latest"))return "gemini-flash-latest";
+  const score=n=>ver(n)*10-(/lite/.test(n)?3:0)-(/preview|exp/.test(n)?1:0)-(/-\d{3,}$/.test(n)?0.5:0);
+  ok.sort((a,b)=>score(b)-score(a));
+  return ok[0]||null;
 }
-function pickTts(names){const t=names.filter(n=>/tts/.test(n)&&/flash/.test(n)).sort().reverse();return t[0]||names.filter(n=>/tts/.test(n))[0]||null}
+function pickTts(names){const t=names.filter(n=>/tts/.test(n)&&/flash/.test(n)).sort((a,b)=>ver(b)-ver(a));return t[0]||names.filter(n=>/tts/.test(n))[0]||null}
 async function discover(){
   const names=await listModels();
-  CFG.models=names.filter(n=>/flash|pro/.test(n)&&!/(tts|image|live|audio|embed|robotics)/.test(n));
+  CFG.models=names.filter(n=>/flash|pro/.test(n)&&!(CFG.bad||[]).includes(n)&&!/(tts|image|live|audio|embed|robotics)/.test(n)).sort((a,b)=>ver(b)-ver(a));
   const chat=pickChat(names);if(chat)CFG.model=chat;
   CFG.tts=pickTts(names)||"gemini-2.5-flash-preview-tts";
   store(KKEY,CFG);fillModels();return chat;
@@ -467,7 +470,7 @@ function fillModels(){
   sel.value=CFG.model;
 }
 function fallbacks(){
-  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model);
+  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model&&!(CFG.bad||[]).includes(n));
   const rank=n=>(/lite/.test(n)?1:0)+(/preview|exp/.test(n)?0.5:0);
   return list.sort((a,b)=>rank(a)-rank(b)).slice(0,3);
 }
@@ -491,7 +494,14 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false}={}
       safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
   catch(e){throw new Error("连不上网络，检查一下网络再试。")}
   const data=await r.json().catch(()=>({}));
-  if(r.status===404&&!retried){const before=CFG.model;try{await discover()}catch(e){} if(CFG.model!==before)return geminiOnce(CFG.model,system,text,{max,json,retried:true})}
+  if(r.status===404&&!retried){
+    const raw=(data&&data.error&&data.error.message)||"";
+    CFG.bad=[...new Set([...(CFG.bad||[]),model])];
+    const sug=(raw.match(/use\s+models\/([\w.\-]+)/i)||[])[1];
+    try{await discover()}catch(e){}
+    if(sug&&!CFG.bad.includes(sug)){CFG.model=sug;store(KKEY,CFG);fillModels()}
+    if(CFG.model&&CFG.model!==model)return geminiOnce(CFG.model,system,text,{max,json,retried:true});
+  }
   if(!r.ok){const raw=data&&data.error&&data.error.message||"";const e=new Error(friendlyErr(r.status,raw)+(r.status>=500||r.status===429?"":""));
     e.busy=r.status>=500||r.status===429;e.detail=r.status+" "+raw.slice(0,120);throw e}
   const out=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
@@ -746,7 +756,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="14";
+const BUILD="15";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
