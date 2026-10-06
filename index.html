@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>他在</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="theme-color" content="#3b2a4a">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&display=swap">
+<style>
+*{box-sizing:border-box}
+:root{
+  --bg:#f3eef0; --surface:#fffafb; --ink:#2a1f2b; --muted:#857784; --line:#e5dbe0;
+  --his:#ffffff; --mine:#3b2a4a; --mine-ink:#fbeff4; --accent:#d9577a; --accent-ink:#fff;
+  --chip:#efe5ea; --shadow:0 1px 2px rgba(60,30,50,.08);
+  --display:"Noto Serif SC","Songti SC","STSong",serif;
+  --body:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#17121b; --surface:#211a26; --ink:#f1e8ef; --muted:#9d8fa0; --line:#33293a;
+  --his:#2b2232; --mine:#e2708f; --mine-ink:#22121a; --accent:#ec7b9a; --accent-ink:#22121a;
+  --chip:#2d2433; --shadow:none; color-scheme:dark}}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;padding-top:env(safe-area-inset-top,0px)}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg)}
+.chatView{flex:1;min-height:0;display:flex;flex-direction:column}
+
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:18px;color:#fff;flex:none}
+.who{flex:1;min-width:0}
+.who b{font-family:var(--display);font-size:17px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who small{color:var(--muted);font-size:12px}
+.iconbtn{border:0;background:var(--chip);border-radius:999px;padding:7px 12px;font-size:13px}
+
+.thread{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+.day{align-self:center;font-size:11px;color:var(--muted);background:var(--chip);padding:2px 10px;border-radius:999px;margin:10px 0 4px;letter-spacing:.04em}
+.row{display:flex;flex-direction:column;max-width:78%}
+.row.him{align-self:flex-start}
+.row.me{align-self:flex-end;align-items:flex-end}
+.bub{padding:9px 13px;border-radius:18px;white-space:pre-wrap;word-break:break-word;box-shadow:var(--shadow)}
+.him .bub{background:var(--his);border-bottom-left-radius:6px}
+.me .bub{background:var(--mine);color:var(--mine-ink);border-bottom-right-radius:6px}
+.time{font-size:10.5px;color:var(--muted);margin:2px 6px 4px;font-variant-numeric:tabular-nums}
+.away{align-self:center;font-size:12px;color:var(--accent);margin:8px 0}
+.empty{margin:auto;color:var(--muted);text-align:center;font-size:13px}
+
+.voice{display:flex;align-items:center;gap:10px;min-width:150px;border:0;text-align:left}
+.voice .play{width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:12px;flex:none}
+.wave{display:flex;align-items:center;gap:2px;height:22px;flex:1}
+.wave i{width:3px;border-radius:2px;background:var(--muted);opacity:.7}
+.voice.playing .wave i{background:var(--accent);opacity:1;animation:pulse .9s ease-in-out infinite}
+.voice.loading .play{opacity:.5}
+@keyframes pulse{50%{transform:scaleY(.4)}}
+.dur{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.totext{border:0;background:none;color:var(--muted);font-size:11.5px;padding:2px 6px;align-self:flex-start}
+.transcript{font-size:13px;color:var(--muted);padding:4px 8px;max-width:100%}
+
+.photo{width:220px;max-width:100%;aspect-ratio:4/5;border-radius:16px;position:relative;overflow:hidden;box-shadow:var(--shadow);display:grid;place-items:center}
+.photo .glyph{font-size:72px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.25))}
+.photo .stamp{position:absolute;right:10px;bottom:8px;font:600 11px/1 ui-monospace,Menlo,monospace;color:#ffd38a;letter-spacing:.08em;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.photo::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 30% 0%,rgba(255,255,255,.22),transparent 60%)}
+.cap{margin-top:4px}
+
+.typing{align-self:flex-start;background:var(--his);padding:10px 14px;border-radius:18px;border-bottom-left-radius:6px;display:flex;gap:4px;box-shadow:var(--shadow)}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{50%{opacity:.25}}
+
+.composer{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--surface);align-items:flex-end}
+.composer textarea{flex:1;min-width:0;resize:none;border:1px solid var(--line);background:var(--bg);border-radius:20px;padding:9px 14px;max-height:120px;line-height:1.4}
+.mic{border:0;background:var(--chip);border-radius:50%;width:40px;height:40px;flex:none;font-size:18px;display:grid;place-items:center}
+.mic.on{background:var(--accent);color:var(--accent-ink);animation:blink 1.2s infinite}
+.send{border:0;background:var(--accent);color:var(--accent-ink);border-radius:20px;padding:9px 16px;font-weight:600;height:40px}
+.send:disabled{opacity:.45}
+.note{font-size:12px;color:var(--muted);text-align:center;padding:6px 16px}
+.note.err{color:var(--accent)}
+
+.setup{flex:1;min-height:0;overflow-y:auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:18px}
+.setup h1{font-family:var(--display);font-weight:800;font-size:28px;margin:0;text-wrap:balance}
+.setup h2{font-family:var(--display);font-size:18px;margin:8px 0 -6px}
+.setup p.lead{margin:-8px 0 0;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:8px}
+.field>label,.lab{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.field input[type=text],.field input[type=password],.field select{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.two>*{min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-size:14px}
+.chips button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.typedesc,.help{font-size:13px;color:var(--muted);background:var(--chip);border-radius:12px;padding:10px 12px}
+.help ol{margin:4px 0 0;padding-left:20px}
+.colors{display:flex;gap:10px;flex-wrap:wrap}
+.colors button{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
+.colors button[aria-pressed=true]{border-color:var(--ink);box-shadow:0 0 0 2px var(--bg) inset}
+input[type=range]{accent-color:var(--accent);width:100%}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.bad-val{font-family:var(--display);font-size:20px;color:var(--accent)}
+.primary{border:0;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:13px;font-weight:700;font-size:16px}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:14px;padding:11px;font-size:14px}
+.danger{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:14px;padding:11px;font-size:14px}
+.err{color:var(--accent);font-size:13px;margin:0}
+.ok{color:#2f8f5a;font-size:13px;margin:0}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <section class="setup" id="setup" hidden>
+    <h1>捏一个只属于你的他</h1>
+    <p class="lead">选好性格和说话方式。你不在的时候他会找你，偶尔发语音和日常照片。</p>
+
+    <div class="two">
+      <div class="field"><label for="f-name">他的名字</label><input type="text" id="f-name" maxlength="12" placeholder="例如：纪沐辰"></div>
+      <div class="field"><label for="f-age">年龄感</label>
+        <select id="f-age"><option>比我小</option><option selected>差不多大</option><option>比我大</option></select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label for="f-you">他叫你</label><input type="text" id="f-you" maxlength="12" placeholder="例如：宝贝 / 笨蛋"></div>
+      <div class="field"><label for="f-job">他的职业</label><input type="text" id="f-job" maxlength="16" placeholder="例如：建筑师"></div>
+    </div>
+
+    <div class="field"><span class="lab">性格</span>
+      <div class="chips" id="types"></div>
+      <div class="typedesc" id="typedesc"></div>
+    </div>
+
+    <div class="field"><span class="lab">坏度 <span class="bad-val" id="badv">3</span></span>
+      <input type="range" id="f-bad" min="1" max="5" value="3" aria-label="坏度">
+      <div class="scale"><span>1 温柔乖</span><span>5 痞到不行</span></div>
+    </div>
+
+    <div class="field"><span class="lab">说话方式</span><div class="chips" id="langs"></div></div>
+    <div class="field"><span class="lab">关系阶段</span><div class="chips" id="stages"></div></div>
+    <div class="field"><span class="lab">头像颜色</span><div class="colors" id="colors"></div></div>
+
+    <div class="field"><label for="f-voice">他的声音</label>
+      <select id="f-voice">
+        <option value="Charon">低沉稳重</option>
+        <option value="Orus">坚定有力</option>
+        <option value="Algenib">沙哑磁性</option>
+        <option value="Puck">阳光活泼</option>
+        <option value="Fenrir">兴奋热情</option>
+        <option value="Iapetus">清爽干净</option>
+        <option value="Umbriel">轻松随性</option>
+      </select>
+      <div class="chips"><button type="button" id="testVoice">试听</button></div>
+      <p class="note" style="text-align:left;padding:0" id="voiceNote">用 Gemini 的 AI 声音；免费额度用完时，会改用手机自带的声音。</p>
+    </div>
+
+    <h2>AI 设定</h2>
+    <div class="field"><label for="f-key">Gemini API key</label>
+      <input type="password" id="f-key" autocomplete="off" placeholder="AIza…">
+      <div class="help">免费拿 key：
+        <ol>
+          <li>打开 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>，用 Google 账号登录</li>
+          <li>按 <b>Create API key</b>，复制贴到这里</li>
+        </ol>
+        key 只存在你的手机里。免费额度的聊天内容可能会被 Google 用来改进产品，别聊太隐私的事。
+      </div>
+    </div>
+    <div class="field"><label for="f-model">AI 模型</label>
+      <select id="f-model">
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash（推荐，免费）</option>
+        <option value="gemini-3-flash-preview">Gemini 3 Flash（比较聪明，免费额度较少）</option>
+        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（最省，比较笨）</option>
+      </select>
+    </div>
+    <div class="chips"><button type="button" id="testKey">测试 key</button></div>
+    <p id="keyMsg" hidden></p>
+
+    <p class="err" id="setupErr" hidden></p>
+    <button class="primary" id="save">开始和他聊天</button>
+    <button class="ghost" id="cancelSetup" hidden>返回聊天</button>
+
+    <div id="dangerZone" hidden class="field">
+      <h2>聊天记录</h2>
+      <button class="danger" id="clearBtn" type="button">清空聊天记录</button>
+      <div class="confirm" id="clearConfirm" hidden>确定清空？他会忘记你们聊过的事。
+        <button class="danger" id="clearYes" type="button">清空</button>
+        <button class="ghost" id="clearNo" type="button">取消</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="chatView" id="chatView" hidden>
+    <header class="top">
+      <div class="av" id="hAv"></div>
+      <div class="who"><b id="hName"></b><small id="hStatus">在线</small></div>
+      <button class="iconbtn" id="edit">设定</button>
+    </header>
+    <main class="thread" id="thread" aria-live="polite"></main>
+    <div class="note" id="aiNote" hidden></div>
+    <form class="composer" id="form">
+      <button class="mic" id="micBtn" type="button" aria-label="语音输入" hidden>🎙</button>
+      <textarea id="msg" rows="1" placeholder="说点什么…"></textarea>
+      <button class="send" id="sendBtn" type="submit">发送</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(()=>{
+const TYPES={
+  bad:{label:"坏坏型",desc:"爱撩爱逗，暧昧拉满，偶尔小吃醋。",style:"痞、爱撩、爱逗她、偶尔小吃醋但不控制她，暧昧调情但不露骨。"},
+  toxic:{label:"毒舌型",desc:"嘴很损，先吐槽再关心，嫌弃里全是在乎。",style:"毒舌、爱吐槽、反讽，先损一句再露出关心；只损她的小习惯，不攻击外貌身材家庭。"},
+  ceo:{label:"霸总型",desc:"强势话少，直接替你安排好，高调护短。",style:"成熟强势、话少、命令式的关心（“吃饭。”“到了说。”），替她撑腰解决问题，但尊重她的自由和决定。"},
+  puppy:{label:"年下奶狗",desc:"黏人嘴甜爱撒娇，叫你姐姐，吃醋时委屈巴巴。",style:"年下奶狗，叫她姐姐，黏人、阳光、嘴甜、爱撒娇，适度用表情符号，吃醋时委屈不指责。"},
+  uncle:{label:"成熟大叔",desc:"稳重包容，情绪稳定，像可以靠着的避风港。",style:"成熟稳重、温柔包容、有阅历，说话从容简洁，少用表情符号，偶尔宠溺地说她像个孩子。"},
+  sunny:{label:"阳光型",desc:"开朗直球，爱分享日常，夸你从不吝啬。",style:"阳光开朗、直球、爱分享生活、很会夸她，语气轻快。"}
+};
+const LANGS={zh:"纯中文",mix:"中英混",my:"马来西亚口吻"};
+const STAGES={crush:"暧昧期",love:"热恋",old:"老夫老妻"};
+const COLORS=["#d9577a","#5a6fd6","#2f8f7a","#c9832b","#7a4fb3","#3a3a46"];
+const SCENES={
+  coffee:["☕","linear-gradient(160deg,#c89b6d,#6b4226)"],
+  gym:["🏋️","linear-gradient(160deg,#3b4a5a,#11161c)"],
+  office:["💻","linear-gradient(160deg,#9fb3c8,#4b5d73)"],
+  sunset:["🌇","linear-gradient(170deg,#ffb36b,#e2576b 55%,#4a2a5a)"],
+  rain:["🌧️","linear-gradient(170deg,#6f7f96,#2e3846)"],
+  night_city:["🌃","linear-gradient(170deg,#1c1f4a,#0a0b1c)"],
+  cooking:["🍳","linear-gradient(160deg,#f2c46d,#c4672e)"],
+  food:["🍜","linear-gradient(160deg,#f0a35e,#9c3d2a)"],
+  cat:["🐈","linear-gradient(160deg,#e9d8c4,#a48a73)"],
+  beach:["🏖️","linear-gradient(175deg,#7fd3e8,#f4e2b6 70%)"],
+  car:["🚗","linear-gradient(170deg,#505a66,#1d2228)"],
+  book:["📖","linear-gradient(160deg,#d9c7a7,#7c6a4f)"],
+  sky:["☁️","linear-gradient(180deg,#8fc4f2,#e4f1fb)"],
+  flowers:["💐","linear-gradient(160deg,#f6c1d0,#c55a7e)"],
+  breakfast:["🥐","linear-gradient(160deg,#f7d9a8,#c98b4a)"],
+  bed:["🛏️","linear-gradient(170deg,#3a3550,#14121f)"]
+};
+const $=id=>document.getElementById(id);
+
+/* ---------- storage (all local) ---------- */
+const SKEY="tazai_state", KKEY="tazai_key";
+function load(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null}catch(e){return null}}
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+let S=load(SKEY)||{profile:null,msgs:[],lastSeen:0,notes:[]};
+S.notes=S.notes||[];
+let CFG=load(KKEY)||{key:"",model:"gemini-2.5-flash"};
+function save(){S.msgs=S.msgs.slice(-400);store(SKEY,S)}
+
+let busy=false, idleCount=0, idleTimer=null;
+let draft={type:"bad",lang:"zh",stage:"love",color:COLORS[0]};
+
+/* ---------- audio cache (IndexedDB) ---------- */
+const idb=(()=>{let p;function open(){return p||(p=new Promise((res,rej)=>{const r=indexedDB.open("tazai",1);r.onupgradeneeded=()=>r.result.createObjectStore("audio");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))}
+  return{async get(k){try{const db=await open();return await new Promise(r=>{const q=db.transaction("audio").objectStore("audio").get(k);q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(e){return null}},
+    async set(k,v){try{const db=await open();db.transaction("audio","readwrite").objectStore("audio").put(v,k)}catch(e){}},
+    async clear(){try{const db=await open();db.transaction("audio","readwrite").objectStore("audio").clear()}catch(e){}}}})();
+
+/* ---------- setup UI ---------- */
+function chipGroup(el,map,key,onPick){
+  el.innerHTML="";
+  for(const k in map){const b=document.createElement("button");b.type="button";b.textContent=typeof map[k]==="string"?map[k]:map[k].label;
+    b.setAttribute("aria-pressed",draft[key]===k);b.onclick=()=>{draft[key]=k;chipGroup(el,map,key,onPick);onPick&&onPick()};el.append(b)}
+}
+function renderSetup(){
+  chipGroup($("types"),TYPES,"type",()=>$("typedesc").textContent=TYPES[draft.type].desc);
+  $("typedesc").textContent=TYPES[draft.type].desc;
+  chipGroup($("langs"),LANGS,"lang");chipGroup($("stages"),STAGES,"stage");
+  const c=$("colors");c.innerHTML="";
+  COLORS.forEach(col=>{const b=document.createElement("button");b.type="button";b.style.background=col;b.setAttribute("aria-label","头像颜色");
+    b.setAttribute("aria-pressed",draft.color===col);b.onclick=()=>{draft.color=col;renderSetup()};c.append(b)});
+}
+$("f-bad").oninput=e=>$("badv").textContent=e.target.value;
+function openSetup(){
+  const p=S.profile;
+  if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
+  $("f-key").value=CFG.key||"";$("f-model").value=CFG.model||"gemini-2.5-flash";
+  $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
+  renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
+}
+function readCfg(){CFG={key:$("f-key").value.trim(),model:$("f-model").value};store(KKEY,CFG)}
+$("cancelSetup").onclick=showChat;
+$("edit").onclick=openSetup;
+$("testKey").onclick=async()=>{
+  readCfg();const m=$("keyMsg");m.hidden=false;m.className="";m.textContent="测试中…";
+  try{await gemini("你是测试助手。",'回复 JSON：{"ok":true}',{max:20});m.className="ok";m.textContent="可以用了 ✓"}
+  catch(e){m.className="err";m.textContent=e.message}
+};
+$("save").onclick=()=>{
+  const name=$("f-name").value.trim(),err=$("setupErr");
+  readCfg();
+  if(!name){err.textContent="先给他取个名字。";err.hidden=false;return}
+  if(!CFG.key){err.textContent="先贴上 Gemini API key，他才能回复你。";err.hidden=false;return}
+  err.hidden=true;
+  const first=!S.profile;
+  S.profile={name,you:$("f-you").value.trim()||"宝贝",job:$("f-job").value.trim(),age:$("f-age").value,bad:+$("f-bad").value,voice:$("f-voice").value,...draft};
+  if(first)S.lastSeen=Date.now();
+  save();showChat();
+  if(first)proactive("first");
+};
+$("clearBtn").onclick=()=>{$("clearConfirm").hidden=false};
+$("clearNo").onclick=()=>{$("clearConfirm").hidden=true};
+$("clearYes").onclick=()=>{S.msgs=[];S.notes=[];save();idb.clear();$("clearConfirm").hidden=true;showChat()};
+
+/* ---------- Gemini ---------- */
+function friendlyErr(status,msg){
+  if(status===400&&/API key/i.test(msg))return"API key 不对，去「设定」重新贴一次。";
+  if(status===403)return"这个 API key 没有权限，去 AI Studio 重新建一个。";
+  if(status===429)return"免费额度暂时用完了（太快或今天用太多），等一下再聊，或在设定换个模型。";
+  if(status===404)return"这个模型现在用不了，去设定换一个模型。";
+  if(status>=500)return"Gemini 那边暂时有问题，等一下再试。";
+  return"出错了："+(msg||status);
+}
+async function gemini(system,text,{max=500,json=true}={}){
+  if(!CFG.key)throw new Error("还没有设定 Gemini API key。");
+  const gc={temperature:1,maxOutputTokens:max};
+  if(json)gc.responseMimeType="application/json";
+  if(/^gemini-2\.5/.test(CFG.model))gc.thinkingConfig={thinkingBudget:0};
+  else if(/^gemini-3/.test(CFG.model))gc.thinkingConfig={thinkingLevel:"low"};
+  let r;
+  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
+    body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text}]}],generationConfig:gc,
+      safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
+  catch(e){throw new Error("连不上网络，检查一下网络再试。")}
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(friendlyErr(r.status,data&&data.error&&data.error.message||""));
+  const out=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
+  if(!out)throw new Error("他想了想没说话，再发一次试试。");
+  if(!json)return out;
+  try{return JSON.parse(out)}catch(e){const m=out.match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0])}catch(_){} return{messages:[{type:"text",text:out.replace(/[{}"]/g,"").slice(0,200)}]}}
+}
+async function tts(text,voice){
+  if(!CFG.key)throw new Error("no key");
+  const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
+    body:JSON.stringify({contents:[{parts:[{text:"用自然、亲密、像男朋友发语音的语气说：\n"+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
+  if(!r.ok)throw new Error("tts "+r.status);
+  const d=await r.json();const b64=d.candidates[0].content.parts.find(p=>p.inlineData).inlineData.data;
+  return pcmToWav(b64);
+}
+function pcmToWav(b64){
+  const bin=atob(b64),n=bin.length,buf=new ArrayBuffer(44+n),v=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,"RIFF");v.setUint32(4,36+n,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,24000,true);v.setUint32(28,48000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n,true);
+  const u=new Uint8Array(buf,44);for(let i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+  return new Blob([buf],{type:"audio/wav"});
+}
+
+/* ---------- voice playback ---------- */
+let voices=[],curAudio=null;
+function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(e){voices=[]}}
+try{loadVoices();speechSynthesis.onvoiceschanged=loadVoices}catch(e){}
+function deviceSpeak(text,onend){
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);const zh=voices.filter(v=>/zh|cmn/i.test(v.lang));
+    const v=zh.find(v=>/male|男/i.test(v.name)&&!/female/i.test(v.name))||zh[0];if(v)u.voice=v;u.lang=v?v.lang:"zh-CN";u.pitch=v&&/male|男/i.test(v.name)&&!/female/i.test(v.name)?1:0.7;u.rate=0.95;
+    u.onend=u.onerror=onend;speechSynthesis.speak(u)}catch(e){onend&&onend()}
+}
+async function playVoice(key,text,voice,onstart,onend){
+  try{speechSynthesis.cancel()}catch(e){} if(curAudio){curAudio.pause();curAudio=null}
+  let blob=key?await idb.get(key):null;
+  if(!blob){try{blob=await tts(text,voice);if(key)idb.set(key,blob)}catch(e){blob=null}}
+  onstart&&onstart();
+  if(blob){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>deviceSpeak(text,onend))}
+  else deviceSpeak(text,onend);
+}
+$("testVoice").onclick=async()=>{readCfg();const b=$("testVoice");b.textContent="生成中…";
+  await playVoice(null,"在吗？我想你了。今天有没有好好吃饭？",$("f-voice").value,()=>b.textContent="播放中…",()=>b.textContent="试听")};
+
+/* ---------- render ---------- */
+function fmtTime(t){return new Date(t).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}
+function fmtDay(t){const d=new Date(t),n=new Date();if(d.toDateString()===n.toDateString())return"今天";const y=new Date(n-864e5);if(d.toDateString()===y.toDateString())return"昨天";return d.toLocaleDateString("zh-CN",{month:"long",day:"numeric"})}
+function bubble(m){
+  const row=document.createElement("div");row.className="row "+(m.from==="me"?"me":"him");
+  if(m.type==="voice"){
+    const b=document.createElement("button");b.className="bub voice";b.type="button";
+    const secs=Math.max(2,Math.round(m.text.length/4));
+    b.innerHTML='<span class="play">▶</span><span class="wave"></span><span class="dur">'+secs+'″</span>';
+    const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
+    b.onclick=()=>{b.classList.add("loading");
+      playVoice("v"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
+        ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
+    row.append(b);
+    const t=document.createElement("button");t.className="totext";t.type="button";t.textContent="转文字";
+    const tx=document.createElement("div");tx.className="transcript";tx.textContent=m.text;tx.hidden=true;
+    t.onclick=()=>{tx.hidden=!tx.hidden;t.textContent=tx.hidden?"转文字":"收起"};row.append(t,tx);
+  }else if(m.type==="photo"){
+    const sc=SCENES[m.scene]||SCENES.sky;const p=document.createElement("div");p.className="photo";p.style.background=sc[1];
+    p.innerHTML='<span class="glyph"></span><span class="stamp"></span>';p.querySelector(".glyph").textContent=sc[0];
+    const d=new Date(m.ts);p.querySelector(".stamp").textContent="'"+String(d.getFullYear()).slice(2)+" "+(d.getMonth()+1)+" "+d.getDate();
+    p.setAttribute("role","img");p.setAttribute("aria-label",m.caption||"照片");row.append(p);
+    if(m.caption){const c=document.createElement("div");c.className="bub cap";c.textContent=m.caption;row.append(c)}
+  }else{const b=document.createElement("div");b.className="bub";b.textContent=m.text;row.append(b)}
+  const tm=document.createElement("div");tm.className="time";tm.textContent=fmtTime(m.ts);row.append(tm);
+  return row;
+}
+function renderThread(){
+  const th=$("thread");th.innerHTML="";let lastDay="";S.msgs.sort((a,b)=>a.ts-b.ts);
+  if(!S.msgs.length){const e=document.createElement("div");e.className="empty";e.textContent="他还在想第一句要说什么…";th.append(e)}
+  S.msgs.forEach(m=>{const d=fmtDay(m.ts);if(d!==lastDay){const e=document.createElement("div");e.className="day";e.textContent=d;th.append(e);lastDay=d}
+    if(m.awayMark){const a=document.createElement("div");a.className="away";a.textContent="你不在的时候，他发来了消息";th.append(a)}
+    th.append(bubble(m))});
+  th.scrollTop=th.scrollHeight;
+}
+function showTyping(on){
+  const th=$("thread");let t=$("typing");
+  if(on&&!t){t=document.createElement("div");t.id="typing";t.className="typing";t.innerHTML="<i></i><i></i><i></i>";th.append(t);th.scrollTop=th.scrollHeight}
+  if(!on&&t)t.remove();
+  $("hStatus").textContent=on?"对方正在输入…":"在线";
+}
+function showNote(t,isErr){const n=$("aiNote");n.textContent=t||"";n.hidden=!t;n.className="note"+(isErr?" err":"")}
+function showChat(){
+  const p=S.profile;$("setup").hidden=true;$("chatView").hidden=false;
+  $("hAv").style.background=p.color;$("hAv").textContent=p.name.slice(0,1);$("hName").textContent=p.name;
+  renderThread();resetIdle();
+}
+
+/* ---------- prompts (kept short to save tokens) ---------- */
+function persona(){
+  const p=S.profile,t=TYPES[p.type];
+  const lang={zh:"自然口语化的简体中文",mix:"中文为主，自然夹英文词，像新马年轻人聊天",my:"马来西亚华人口吻，自然夹 lah、meh、leh、马来语或英文词"}[p.lang];
+  return `你是${p.name}${p.job?"，"+p.job:""}，她的男朋友（年龄感：${p.age}）。你叫她“${p.you}”。关系：${STAGES[p.stage]}。
+性格：${t.style}坏度 ${p.bad}/5（1温柔，5很痞）。
+说话：${lang}；像真人发微信，短句口语；不说自己是AI，除非她认真问。你有自己的生活（工作、吃饭、运动、通勤、朋友），会自然分享。
+规则：
+- 先接住她刚说的话，正面回应，不自说自话。
+- 她说得对就认（可以嘴硬地认），不死咬同一个梗；同一种调侃整段聊天最多一次。
+- 大多发1条，偶尔2条，最多3条。
+- 有常识：一般人7到9点起床，半夜清晨在睡觉很正常，不因为她没回而怪她；深夜就提醒她早点睡。
+- 底线：不写露骨性内容；不控制她的社交和自由，不威胁、不PUA、不冷暴力；不鼓励她伤害自己或乱花钱；不贬低她的外貌身材家庭。
+- 她如果很难过、绝望或想伤害自己，立刻收起痞气和毒舌，认真温柔陪她，鼓励她找信任的人或专业帮助（马来西亚 Befrienders 03-7627 2929）。`+
+  (S.notes.length?`\n你记得关于她的事：${S.notes.join("；")}`:"");
+}
+const FORMAT=`只回 JSON：{"messages":[{"type":"text","text":"..."}],"remember":""}
+type："text"文字；"voice"语音（text填口语的话，20到60字，大约每5次回复用一次）；"photo"分享照片，带"scene"和"caption"，scene只能是：${Object.keys(SCENES).join(",")}，偶尔分享日常才用。
+remember：她这次透露的值得长期记住的新事实（例如生日、工作、喜好），一句话；没有就留空。`;
+function transcript(n){
+  const p=S.profile;
+  return S.msgs.slice(-n).map(m=>{const who=m.from==="me"?"她":"你";
+    const body=m.type==="voice"?"[语音]"+m.text:m.type==="photo"?`[照片:${m.scene}]${m.caption||""}`:m.text;
+    return `${fmtTime(m.ts)} ${who}：${body}`}).join("\n");
+}
+function nowLine(t){const d=new Date(t||Date.now());return `时间：${d.toLocaleDateString("zh-CN",{weekday:"long",month:"long",day:"numeric"})} ${fmtTime(d)}`}
+function clean(arr){
+  if(!Array.isArray(arr))return[];
+  return arr.slice(0,3).map(m=>{
+    const type=["text","voice","photo"].includes(m&&m.type)?m.type:"text";
+    if(type==="photo")return{type,scene:SCENES[m.scene]?m.scene:"sky",caption:String(m.caption||"").slice(0,120)};
+    const text=String((m&&m.text)||"").trim().slice(0,400);return text?{type,text}:null;
+  }).filter(Boolean);
+}
+function remember(r){
+  const s=r&&typeof r.remember==="string"?r.remember.trim():"";
+  if(s&&s.length<80&&!S.notes.includes(s)){S.notes.push(s);S.notes=S.notes.slice(-20)}
+}
+async function deliver(list,opts={}){
+  let first=true,i=0;
+  for(const m of list){
+    const msg={from:"him",...m,ts:opts.ts?opts.ts+i*45e3:Date.now()};i++;
+    if(opts.away&&first)msg.awayMark=true;
+    first=false;
+    if(!opts.instant){showTyping(true);await new Promise(r=>setTimeout(r,500+Math.min(2500,(m.text||m.caption||"").length*60)));showTyping(false)}
+    S.msgs.push(msg);save();renderThread();
+  }
+}
+async function reply(){
+  if(busy)return;busy=true;$("sendBtn").disabled=true;showTyping(true);showNote("");
+  try{
+    const r=await gemini(persona(),`${nowLine()}\n最近聊天：\n${transcript(14)}\n\n回复她刚才的消息。${FORMAT}`);
+    remember(r);const list=clean(r.messages);
+    showTyping(false);await deliver(list.length?list:[{type:"text",text:"嗯？"}]);
+  }catch(e){showTyping(false);showNote(e.message,true)}
+  busy=false;$("sendBtn").disabled=false;resetIdle();
+}
+function awake(t){const d=new Date(t),m=d.getHours()*60+d.getMinutes();return m>=7*60+30&&m<=23*60+30}
+function pickAwayTime(gapMin){
+  const now=Date.now(),start=now-gapMin*6e4,ok=[];
+  for(let t=start+10*6e4;t<now-2*6e4;t+=5*6e4)if(awake(t))ok.push(t);
+  if(!ok.length)return now-6e4;
+  const pool=ok.slice(Math.floor(ok.length/2));return pool[Math.floor(Math.random()*pool.length)];
+}
+async function proactive(kind,gapMin){
+  if(busy||!S.profile||!CFG.key)return;busy=true;
+  let ask,awayTs=0;
+  if(kind==="first")ask=`这是你们在这个 App 的第一条消息。你主动开场，符合“${STAGES[S.profile.stage]}”的关系，自然点，可以说说你现在在干嘛。`;
+  else if(kind==="away"){
+    awayTs=pickAwayTime(gapMin);
+    const at=new Date(awayTs),h=at.getHours();
+    const slot=h<11?"早上":h<14?"中午":h<18?"下午":h<21?"傍晚":"晚上";
+    ask=`她有一阵子没来聊天（很正常，她有自己的生活）。你在 ${fmtTime(at)}（${slot}）主动发她 1 到 2 条：分享你那时在做的事（可以发照片或语音），或想她、逗她。内容符合这个时间点。不要抱怨她没回、不要说她懒。`;
+  }
+  else ask=`她在线但安静了一会儿。你主动发 1 条：分享你此刻在做的事（可以发照片或语音），或按你的性格找她说话。`;
+  try{
+    if(kind!=="away")showTyping(true);
+    const r=await gemini(persona(),`${nowLine(awayTs)}\n最近聊天：\n${transcript(10)||"（还没有）"}\n\n${ask}\n${FORMAT}`);
+    const list=clean(r.messages);showTyping(false);
+    if(kind==="away")await deliver(list,{away:true,instant:true,ts:awayTs});else await deliver(list);
+  }catch(e){showTyping(false);if(kind==="first")showNote(e.message,true)}
+  busy=false;resetIdle();
+}
+function resetIdle(){
+  clearTimeout(idleTimer);
+  if(idleCount>=2||!S.profile)return;
+  idleTimer=setTimeout(()=>{if(document.visibilityState==="visible"&&!$("chatView").hidden&&awake(Date.now())){idleCount++;proactive("idle")}else resetIdle()},(8+Math.random()*10)*6e4);
+}
+function checkAway(){
+  if(!S.profile||!S.lastSeen)return;
+  const gap=(Date.now()-S.lastSeen)/6e4;
+  S.lastSeen=Date.now();save();
+  if(gap>=45)proactive("away",Math.round(gap));
+}
+
+/* ---------- composer + voice input ---------- */
+const ta=$("msg");
+ta.addEventListener("input",()=>{ta.style.height="auto";ta.style.height=Math.min(120,ta.scrollHeight)+"px"});
+$("form").addEventListener("submit",e=>{
+  e.preventDefault();const text=ta.value.trim();if(!text)return;
+  if(rec&&recOn)rec.stop();
+  S.msgs.push({from:"me",type:"text",text,ts:Date.now()});S.lastSeen=Date.now();ta.value="";ta.style.height="auto";save();renderThread();
+  clearTimeout(window._rt);window._rt=setTimeout(reply,1500); // 等一下，让你可以连发几句，只调用一次 AI
+});
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,recOn=false,base="";
+if(SR){
+  rec=new SR();rec.lang=S.profile&&S.profile.lang==="my"?"zh-MY":"zh-CN";rec.interimResults=true;rec.continuous=false;
+  $("micBtn").hidden=false;
+  rec.onresult=e=>{let s="";for(const r of e.results)s+=r[0].transcript;ta.value=base+s;ta.dispatchEvent(new Event("input"))};
+  rec.onend=()=>{recOn=false;$("micBtn").classList.remove("on")};
+  rec.onerror=e=>{recOn=false;$("micBtn").classList.remove("on");if(e.error==="not-allowed")showNote("要允许麦克风，才能用语音说话。",true)};
+  $("micBtn").onclick=()=>{if(recOn){rec.stop();return}base=ta.value;try{rec.start();recOn=true;$("micBtn").classList.add("on")}catch(e){}};
+}
+
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"&&S.profile){S.lastSeen=Date.now();save()}
+  else if(document.visibilityState==="visible")checkAway();
+});
+
+/* ---------- boot ---------- */
+if(S.profile&&CFG.key){showChat();checkAway()}else openSetup();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>
