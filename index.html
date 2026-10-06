@@ -712,7 +712,13 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+const BUILD="10";
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
+// 自动更新：网上有新版就重新载入一次
+fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
+  if(v&&v!==BUILD){let n=0;try{n=+sessionStorage.getItem("tz_reload")||0}catch(e){}
+    if(n<2){try{sessionStorage.setItem("tz_reload",n+1)}catch(e){}
+      (caches&&caches.keys?caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))):Promise.resolve()).then(()=>location.reload())}}}).catch(()=>{});
 })();
 </script>
 </body>
