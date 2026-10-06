@@ -393,6 +393,7 @@ function fallbacks(){
   return list.sort((a,b)=>rank(a)-rank(b)).slice(0,3);
 }
 async function gemini(system,text,opts={}){
+  if(!(CFG.models&&CFG.models.length)){try{await discover()}catch(e){}}
   const tried=[CFG.model,...fallbacks()];let lastErr;
   for(let i=0;i<tried.length;i++){
     try{return await geminiOnce(tried[i],system,text,opts)}
