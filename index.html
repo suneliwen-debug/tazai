@@ -198,11 +198,8 @@ input[type=range]{accent-color:var(--accent);width:100%}
       </div>
     </div>
     <div class="field"><label for="f-model">AI 模型</label>
-      <select id="f-model">
-        <option value="gemini-2.5-flash">Gemini 2.5 Flash（推荐，免费）</option>
-        <option value="gemini-3-flash-preview">Gemini 3 Flash（比较聪明，免费额度较少）</option>
-        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（最省，比较笨）</option>
-      </select>
+      <select id="f-model"></select>
+      <span class="note" style="text-align:left;padding:0">按「测试 key」后会自动选好能用的模型。</span>
     </div>
     <div class="chips"><button type="button" id="testKey">测试 key</button></div>
     <p id="keyMsg" hidden></p>
@@ -276,7 +273,7 @@ function load(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null
 function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
 let S=load(SKEY)||{profile:null,msgs:[],lastSeen:0,notes:[]};
 S.notes=S.notes||[];
-let CFG=load(KKEY)||{key:"",model:"gemini-2.5-flash"};
+let CFG=load(KKEY)||{key:"",model:"gemini-flash-latest"};
 function save(){S.msgs=S.msgs.slice(-400);store(SKEY,S)}
 
 let busy=false, idleCount=0, idleTimer=null;
@@ -324,17 +321,18 @@ $("f-bad").oninput=e=>$("badv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
-  $("f-key").value=CFG.key||"";$("f-model").value=CFG.model||"gemini-2.5-flash";
+  $("f-key").value=CFG.key||"";fillModels();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
-function readCfg(){CFG={key:$("f-key").value.trim(),model:$("f-model").value};store(KKEY,CFG)}
+function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;store(KKEY,CFG)}
 $("cancelSetup").onclick=showChat;
 $("edit").onclick=openSetup;
 $("testKey").onclick=async()=>{
   readCfg();const m=$("keyMsg");m.hidden=false;m.className="";m.textContent="测试中…";
-  try{await gemini("你是测试助手。",'回复 JSON：{"ok":true}',{max:20});m.className="ok";m.textContent="可以用了 ✓"}
+  try{const chat=await discover();if(!chat)throw new Error("这个 key 找不到可以聊天的 Flash 模型。");
+    await gemini("你是测试助手。",'回复 JSON：{"ok":true}',{max:20});m.className="ok";m.textContent="可以用了 ✓ 模型："+CFG.model}
   catch(e){m.className="err";m.textContent=e.message}
 };
 $("save").onclick=()=>{
@@ -344,6 +342,7 @@ $("save").onclick=()=>{
   if(!CFG.key){err.textContent="先贴上 Gemini API key，他才能回复你。";err.hidden=false;return}
   err.hidden=true;
   const first=!S.profile;
+  if(!(CFG.models&&CFG.models.length))discover().catch(()=>{});
   S.profile={name,you:$("f-you").value.trim()||"宝贝",job:$("f-job").value.trim(),age:$("f-age").value,bad:+$("f-bad").value,voice:$("f-voice").value,...draft};
   if(first)S.lastSeen=Date.now();
   save();showChat();
@@ -358,13 +357,39 @@ function friendlyErr(status,msg){
   if(status===400&&/API key/i.test(msg))return"API key 不对，去「设定」重新贴一次。";
   if(status===403)return"这个 API key 没有权限，去 AI Studio 重新建一个。";
   if(status===429)return"免费额度暂时用完了（太快或今天用太多），等一下再聊，或在设定换个模型。";
-  if(status===404)return"这个模型现在用不了，去设定换一个模型。";
+  if(status===404)return"这个模型现在用不了，按「测试 key」让它自动换一个。";
   if(status>=500)return"Gemini 那边暂时有问题，等一下再试。";
   return"出错了："+(msg||status);
 }
-async function gemini(system,text,{max=500,json=true}={}){
+async function listModels(){
+  const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",{headers:{"x-goog-api-key":CFG.key}});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(friendlyErr(r.status,d&&d.error&&d.error.message||""));
+  return (d.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes("generateContent")).map(m=>m.name.replace(/^models\//,""));
+}
+function pickChat(names){
+  const ok=names.filter(n=>/flash/.test(n)&&!/(tts|image|live|audio|embed|robotics|thinking-exp|computer)/.test(n));
+  const pref=["gemini-flash-latest","gemini-3-flash","gemini-3-flash-preview","gemini-2.5-flash"];
+  for(const p of pref)if(ok.includes(p))return p;
+  const nonLite=ok.filter(n=>!/lite/.test(n)).sort().reverse();
+  return nonLite[0]||ok.sort().reverse()[0]||null;
+}
+function pickTts(names){const t=names.filter(n=>/tts/.test(n)&&/flash/.test(n)).sort().reverse();return t[0]||names.filter(n=>/tts/.test(n))[0]||null}
+async function discover(){
+  const names=await listModels();
+  CFG.models=names.filter(n=>/flash|pro/.test(n)&&!/(tts|image|live|audio|embed|robotics)/.test(n));
+  const chat=pickChat(names);if(chat)CFG.model=chat;
+  CFG.tts=pickTts(names)||"gemini-2.5-flash-preview-tts";
+  store(KKEY,CFG);fillModels();return chat;
+}
+function fillModels(){
+  const sel=$("f-model");const list=(CFG.models&&CFG.models.length)?CFG.models:[CFG.model||"gemini-flash-latest"];
+  sel.innerHTML="";list.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n+(n===CFG.model?"（自动选的）":"");sel.append(o)});
+  sel.value=CFG.model;
+}
+async function gemini(system,text,{max=500,json=true,retried=false}={}){
   if(!CFG.key)throw new Error("还没有设定 Gemini API key。");
-  const gc={temperature:1,maxOutputTokens:max};
+  const gc={temperature:1,maxOutputTokens:Math.max(max,2048)}; // 留空间给模型思考，实际回复仍然很短
   if(json)gc.responseMimeType="application/json";
   if(/^gemini-2\.5/.test(CFG.model))gc.thinkingConfig={thinkingBudget:0};
   else if(/^gemini-3/.test(CFG.model))gc.thinkingConfig={thinkingLevel:"low"};
@@ -374,6 +399,7 @@ async function gemini(system,text,{max=500,json=true}={}){
       safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
   catch(e){throw new Error("连不上网络，检查一下网络再试。")}
   const data=await r.json().catch(()=>({}));
+  if(r.status===404&&!retried){const before=CFG.model;try{await discover()}catch(e){} if(CFG.model!==before)return gemini(system,text,{max,json,retried:true})}
   if(!r.ok)throw new Error(friendlyErr(r.status,data&&data.error&&data.error.message||""));
   const out=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
   if(!out)throw new Error("他想了想没说话，再发一次试试。");
@@ -382,7 +408,7 @@ async function gemini(system,text,{max=500,json=true}={}){
 }
 async function tts(text,voice){
   if(!CFG.key)throw new Error("no key");
-  const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.tts||"gemini-2.5-flash-preview-tts"}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
     body:JSON.stringify({contents:[{parts:[{text:"用标准普通话、年轻男生的声音，语气放松、温柔、带一点笑意，像男朋友在微信发语音，语速自然不要太慢：\n"+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
   if(!r.ok)throw new Error("tts "+r.status);
   const d=await r.json();const b64=d.candidates[0].content.parts.find(p=>p.inlineData).inlineData.data;
