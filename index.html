@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>他在</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192-v2.png">
+<link rel="apple-touch-icon" href="icons/icon-192-v2.png">
 <meta name="theme-color" content="#3b2a4a">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&display=swap" media="print" onload="this.media='all'">
 <style>
@@ -84,6 +84,18 @@ a{color:var(--accent)}
 .note.err{color:var(--accent)}
 
 .setup{flex:1;min-height:0;overflow-y:auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:18px}
+.hero{position:relative;margin:-20px -16px 4px;padding:28px 20px 24px;min-height:250px;overflow:hidden;color:#fff7fa;
+  background:linear-gradient(180deg,#2a1840 0%,#5a2a5e 45%,#a3446f 80%,#e2708c 100%)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%}
+.moon{position:absolute;top:26px;right:30px;width:46px;height:46px;border-radius:50%;box-shadow:-11px 7px 0 0 #ffecd6;transform:rotate(-18deg);filter:drop-shadow(0 0 12px rgba(255,220,200,.45))}
+.hero-in{position:relative;display:flex;flex-direction:column;gap:6px}
+.brand{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;letter-spacing:.06em;text-shadow:0 4px 24px rgba(40,10,40,.45)}
+.tag{font-family:var(--display);font-size:16px;opacity:.9;letter-spacing:.08em}
+.preview{display:flex;align-items:flex-end;gap:8px;margin-top:26px}
+.pav{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;color:#fff;background:#d9577a;border:2px solid rgba(255,255,255,.7);flex:none;transition:background .3s}
+.pbub{background:rgba(255,255,255,.94);color:#2a1f2b;padding:9px 13px;border-radius:18px;border-bottom-left-radius:6px;max-width:78%;font-size:14px;box-shadow:0 6px 20px rgba(40,10,40,.25);animation:rise .5s ease}
+@keyframes rise{from{transform:translateY(6px);opacity:.4}}
+.setup.editing .hero{display:none}
 .setup h1{font-family:var(--display);font-weight:800;font-size:28px;margin:0;text-wrap:balance}
 .setup h2{font-family:var(--display);font-size:18px;margin:8px 0 -6px}
 .setup p.lead{margin:-8px 0 0;color:var(--muted)}
@@ -115,7 +127,19 @@ input[type=range]{accent-color:var(--accent);width:100%}
 <body>
 <div class="app" id="app">
   <section class="setup" id="setup" hidden>
-    <h1>捏一个只属于你的他</h1>
+    <div class="hero" id="hero">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div class="moon" aria-hidden="true"></div>
+      <div class="hero-in">
+        <div class="brand">他在</div>
+        <div class="tag">你一回头，他都在。</div>
+        <div class="preview">
+          <div class="pav" id="pAv">他</div>
+          <div class="pbub" id="pBub">在吗？今天有没有想我。</div>
+        </div>
+      </div>
+    </div>
+    <h1 id="setupTitle">捏一个只属于你的他</h1>
     <p class="lead">选好性格和说话方式。你不在的时候他会找你，偶尔发语音和日常照片。</p>
 
     <div class="two">
@@ -270,7 +294,25 @@ function chipGroup(el,map,key,onPick){
   for(const k in map){const b=document.createElement("button");b.type="button";b.textContent=typeof map[k]==="string"?map[k]:map[k].label;
     b.setAttribute("aria-pressed",draft[key]===k);b.onclick=()=>{draft[key]=k;chipGroup(el,map,key,onPick);onPick&&onPick()};el.append(b)}
 }
+const SAMPLE={bad:"今天穿那么好看，是想给谁看？",toxic:"又熬夜？黑眼圈都快掉到下巴了。…去睡。",ceo:"吃饭。吃完拍照给我。",puppy:"姐姐～你今天有没有想我呀 🥺",uncle:"辛苦了。今天先别想太多，好好吃顿饭。",sunny:"刚看到超美的晚霞！第一个就想发给你 🌇"};
+function renderPreview(){
+  const n=$("f-name").value.trim();$("pAv").textContent=n?n.slice(0,1):"他";$("pAv").style.background=draft.color;
+  const b=$("pBub"),t=SAMPLE[draft.type]||"";if(b.textContent!==t){b.textContent=t;b.style.animation="none";b.offsetWidth;b.style.animation=""}
+}
+$("f-name").addEventListener("input",renderPreview);
+(function sky(){
+  const c=$("sky"),x=c.getContext("2d");let stars=[],w=0,h=0;
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function size(){const r=c.getBoundingClientRect(),d=devicePixelRatio||1;w=r.width;h=r.height;c.width=w*d;c.height=h*d;x.setTransform(d,0,0,d,0,0);
+    stars=Array.from({length:Math.round(w*h/1800)},()=>({x:Math.random()*w,y:Math.random()*h*.75,r:Math.random()*1.3+.3,p:Math.random()*6.3,s:.6+Math.random()*1.4}))}
+  function draw(t){if($("setup").hidden){requestAnimationFrame(draw);return}
+    if(!w)size();x.clearRect(0,0,w,h);
+    for(const s of stars){const a=.35+.65*Math.abs(Math.sin(s.p+t/1000*s.s));x.globalAlpha=a;x.fillStyle="#fff";x.beginPath();x.arc(s.x,s.y,s.r,0,6.3);x.fill()}
+    x.globalAlpha=1;if(!reduce)requestAnimationFrame(draw)}
+  addEventListener("resize",()=>{w=0});requestAnimationFrame(draw);
+})();
 function renderSetup(){
+  renderPreview();
   chipGroup($("types"),TYPES,"type",()=>$("typedesc").textContent=TYPES[draft.type].desc);
   $("typedesc").textContent=TYPES[draft.type].desc;
   chipGroup($("langs"),LANGS,"lang");chipGroup($("stages"),STAGES,"stage");
@@ -283,6 +325,7 @@ function openSetup(){
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
   $("f-key").value=CFG.key||"";$("f-model").value=CFG.model||"gemini-2.5-flash";
+  $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
