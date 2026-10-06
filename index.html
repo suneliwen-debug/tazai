@@ -151,6 +151,12 @@ input[type=range]{accent-color:var(--accent);width:100%}
         <option value="Fenrir">兴奋热情</option>
         <option value="Iapetus">清爽干净</option>
         <option value="Umbriel">轻松随性</option>
+        <option value="Enceladus">温柔气声</option>
+        <option value="Algieba">顺滑温暖</option>
+        <option value="Achird">友善亲切</option>
+        <option value="Sadaltager">成熟知性</option>
+        <option value="Alnilam">稳重低音</option>
+        <option value="Rasalgethi">磁性讲述</option>
       </select>
       <div class="chips"><button type="button" id="testVoice">试听</button></div>
       <p class="note" style="text-align:left;padding:0" id="voiceNote">用 Gemini 的 AI 声音；免费额度用完时，会改用手机自带的声音。</p>
@@ -334,7 +340,7 @@ async function gemini(system,text,{max=500,json=true}={}){
 async function tts(text,voice){
   if(!CFG.key)throw new Error("no key");
   const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
-    body:JSON.stringify({contents:[{parts:[{text:"用自然、亲密、像男朋友发语音的语气说：\n"+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
+    body:JSON.stringify({contents:[{parts:[{text:"用标准普通话、年轻男生的声音，语气放松、温柔、带一点笑意，像男朋友在微信发语音，语速自然不要太慢：\n"+text}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
   if(!r.ok)throw new Error("tts "+r.status);
   const d=await r.json();const b64=d.candidates[0].content.parts.find(p=>p.inlineData).inlineData.data;
   return pcmToWav(b64);
@@ -349,24 +355,29 @@ function pcmToWav(b64){
 }
 
 /* ---------- voice playback ---------- */
-let voices=[],curAudio=null;
+let voices=[],curAudio=null,lastErr="";
 function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(e){voices=[]}}
 try{loadVoices();speechSynthesis.onvoiceschanged=loadVoices}catch(e){}
 function deviceSpeak(text,onend){
   try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);const zh=voices.filter(v=>/zh|cmn/i.test(v.lang));
-    const v=zh.find(v=>/male|男/i.test(v.name)&&!/female/i.test(v.name))||zh[0];if(v)u.voice=v;u.lang=v?v.lang:"zh-CN";u.pitch=v&&/male|男/i.test(v.name)&&!/female/i.test(v.name)?1:0.7;u.rate=0.95;
+    const v=zh.find(v=>/male|男/i.test(v.name)&&!/female/i.test(v.name))||zh[0];if(v)u.voice=v;u.lang=v?v.lang:"zh-CN";u.pitch=1;u.rate=0.95;
     u.onend=u.onerror=onend;speechSynthesis.speak(u)}catch(e){onend&&onend()}
 }
+let lastSource="";
 async function playVoice(key,text,voice,onstart,onend){
   try{speechSynthesis.cancel()}catch(e){} if(curAudio){curAudio.pause();curAudio=null}
   let blob=key?await idb.get(key):null;
-  if(!blob){try{blob=await tts(text,voice);if(key)idb.set(key,blob)}catch(e){blob=null}}
+  if(!blob){try{blob=await tts(text,voice);if(key)idb.set(key,blob)}catch(e){blob=null;lastErr=e&&e.message||""}}
+  lastSource=blob?"ai":"device";
   onstart&&onstart();
   if(blob){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>deviceSpeak(text,onend))}
   else deviceSpeak(text,onend);
 }
 $("testVoice").onclick=async()=>{readCfg();const b=$("testVoice");b.textContent="生成中…";
-  await playVoice(null,"在吗？我想你了。今天有没有好好吃饭？",$("f-voice").value,()=>b.textContent="播放中…",()=>b.textContent="试听")};
+  await playVoice(null,"在吗？我想你了。今天有没有好好吃饭？",$("f-voice").value,()=>{b.textContent="播放中…";
+    $("voiceNote").textContent=lastSource==="ai"?"现在播放的是 Gemini AI 声音。不喜欢就换上面的声音再试听。":
+      (CFG.key?"AI 声音暂时用不了（"+(/429/.test(lastErr)?"免费语音额度用完了":"出错了")+"），现在是手机自带的声音。":"还没贴 Gemini key，现在是手机自带的声音。先在下面贴 key，再回来试听 AI 声音。")},
+    ()=>b.textContent="试听")};
 
 /* ---------- render ---------- */
 function fmtTime(t){return new Date(t).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit",hour12:false})}
