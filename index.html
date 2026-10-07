@@ -1139,8 +1139,10 @@ ta.addEventListener("input",()=>{ta.style.height="auto";ta.style.height=Math.min
 const genCache=new Map();
 function genURL(m){
   const look=(S.profile&&S.profile.look)||"";
-  const prompt=(m.prompt+", realistic smartphone photo, natural colors, no text, no watermark").slice(0,900);
-  let u="https://image.pollinations.ai/prompt/"+encodeURIComponent(prompt)+"?width=768&height=960&nologo=true&private=true&model=flux&seed="+(m.seed||1);
+  const selfie=/selfie|mirror|me |myself|my face|portrait/i.test(m.prompt)||/selfie/.test(m.scene||"");
+  const who=selfie?", handsome East Asian man, 25 years old"+(look?" ("+look+")":"")+", natural skin texture, flattering soft light":"";
+  const prompt=(m.prompt+who+", shot on iPhone 15 Pro, candid lifestyle photo, Instagram aesthetic, soft natural light, shallow depth of field, warm color grading, high detail, sharp focus, photorealistic, no text, no watermark, no distorted hands").slice(0,1200);
+  let u="https://image.pollinations.ai/prompt/"+encodeURIComponent(prompt)+"?width=832&height=1040&nologo=true&private=true&enhance=true&model=flux&seed="+(m.seed||1);
   if(CFG.polToken)u+="&token="+encodeURIComponent(CFG.polToken);
   return u;
 }
@@ -1203,7 +1205,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="49";
+const BUILD="50";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
