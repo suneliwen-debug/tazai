@@ -608,7 +608,7 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false,noT
   }
   let r;
   try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
-    body:JSON.stringify({...(isGemma?{}:{systemInstruction:{parts:[{text:system}]}}),contents:[{role:"user",parts:[{text:isGemma?"【角色设定，照着演，不要复述、不要解释】\n"+system+"\n\n【任务】\n"+text+"\n\n只输出一个 JSON，第一个字符必须是 {，不要任何其他文字、不要英文说明。":text}]}],generationConfig:gc,
+    body:JSON.stringify({...(isGemma?{}:{systemInstruction:{parts:[{text:system}]}}),contents:isGemma&&json?gemmaTurns(system,text):[{role:"user",parts:[{text:isGemma?system+"\n\n"+text:text}]}],generationConfig:gc,
       safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
   catch(e){throw new Error("连不上网络，检查一下网络再试。")}
   const data=await r.json().catch(()=>({}));
@@ -636,10 +636,25 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false,noT
   const out=(data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
   if(!out)throw new Error("他想了想没说话，再发一次试试。");
   if(!json)return out;
+  if(isGemma){const j=gemmaParse(out);if(j)return j}
   const t=out.replace(/^[\s\S]*?```(?:json)?\s*/,"").replace(/\s*```[\s\S]*$/,"");
   for(const cand of [out,t,(out.match(/\{[\s\S]*\}/)||[])[0]]){if(!cand)continue;try{const j=JSON.parse(cand);if(j&&Array.isArray(j.messages))return j}catch(_){}}
   // 格式不对：不要把奇怪的内容当成他的话，当作失败让它重试
   const e=new Error("AI 回的格式不对");e.busy=true;e.detail="bad format "+model;throw e;
+}
+function gemmaTurns(system,text){
+  const task=text.split("只回 JSON")[0].trim();
+  const stk=Object.entries(STICKERS).map(([k,v])=>k+"="+v[1]).join("，");
+  return [
+    {role:"user",parts:[{text:"我们来角色扮演。下面是你的角色，你就是他，不要复述设定、不要解释、不要说英文：\n"+system+"\n明白就只回两个字：明白"}]},
+    {role:"model",parts:[{text:"明白"}]},
+    {role:"user",parts:[{text:task+"\n\n直接用你的口吻回她，像发微信：1到3行，每行就是一条消息，口语短句。想发表情包就单独一行写 [sticker:代号]，代号："+stk+"。只写要发的消息本身。"}]}
+  ];
+}
+function gemmaParse(out){
+  const lines=out.replace(/```[a-z]*|```/g,"").split(/\n+/).map(l=>l.replace(/^\s*(?:[-*•]|\d+[.、)]|陆辰[:：]|他[:：]|消息\d*[:：])\s*/,"").replace(/^["“]|["”]$/g,"").trim()).filter(Boolean);
+  if(!lines.length)return null;
+  return{messages:lines.slice(0,4).map(l=>({type:"text",text:l})),remember:""};
 }
 async function tts(text,voice){
   if(!CFG.key)throw new Error("no key");
@@ -832,9 +847,14 @@ function splitInline(arr){
   }
   return out;
 }
+function looksBroken(t){
+  if(/(boyfriend|toxic tongue|little fairy|persona|badness level|stage:|same age|角色设定|坏度\s*\d)/i.test(t))return true;
+  const p=S.profile||{};if(p.lang==="mix"||p.lang==="my")return false;
+  const letters=(t.match(/[A-Za-z]/g)||[]).length;return t.length>25&&letters/t.length>0.45;
+}
 function clean(arr){
   if(!Array.isArray(arr))return[];
-  arr=splitInline(arr);
+  arr=splitInline(arr).filter(m=>!(m&&typeof m.text==="string"&&m.type!=="voice"&&looksBroken(m.text)));
   return arr.slice(0,4).map(m=>{
     const type=["text","voice","photo","sticker"].includes(m&&m.type)?m.type:"text";
     if(type==="sticker")return STICKERS[m.sid]?{type,sid:m.sid}:null;
@@ -866,8 +886,8 @@ async function reply(){
     try{
       if(attempt)await new Promise(r=>setTimeout(r,attempt*2500));
       const r=await chatAI(persona(),`${nowLine()}\n最近聊天：\n${transcript(14)}\n\n回复她刚才的消息（如果她连发了几句，一起回应）。${FMT()}`);
-      remember(r);const list=clean(r.messages);
-      showTyping(false);await deliver(list.length?list:[{type:"text",text:"嗯？"}]);ok=true;
+      const list=clean(r.messages);if(!list.length){const e=new Error("回复内容不对");e.busy=true;throw e}
+      remember(r);showTyping(false);await deliver(list);ok=true;
     }catch(e){err=e;if(/key|API key|权限/.test(e.message))break}
   }
   showTyping(false);
@@ -987,7 +1007,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="27";
+const BUILD="28";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
