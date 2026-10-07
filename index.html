@@ -200,9 +200,6 @@ input[type=range]{accent-color:var(--accent);width:100%}
     </div>
     <details class="azbox" id="myPromptBox" style="margin-bottom:14px">
       <summary>我自己写的 prompt（点开查看 / 修改）<span id="myPromptTag" style="font-weight:400;opacity:.7"></span></summary>
-    <details class="field" id="privBox" style="border:1px solid var(--line);border-radius:12px;padding:10px 12px">
-    <summary style="cursor:pointer;font-weight:600">🔒 我自己写的设定（点开查看 / 编辑）</summary>
-    <div style="margin-top:10px">
     <div class="field"><label for="f-custom">我自己写的人设（选填）</label>
       <textarea id="f-custom" rows="5" maxlength="1500" style="border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;resize:vertical" placeholder="例如：他是建筑师，住在 JB，养了一只叫团子的猫。口头禅是「行吧，听你的」。我们在咖啡店认识，他第一次见我就把咖啡洒在我身上……"></textarea>
       <p class="note" style="text-align:left;padding:0">写他的背景、习惯、口头禅、你们的故事，越具体他越像真人。</p>
@@ -211,8 +208,6 @@ input[type=range]{accent-color:var(--accent);width:100%}
       <textarea id="f-rules" rows="5" maxlength="1500" style="border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px;resize:vertical" placeholder="例如：可以用「宝宝」「老婆」这种称呼；可以说……；不要说……；亲密的时候可以写到……"></textarea>
       <p class="note" style="text-align:left;padding:0">写他可以用什么字眼、可以写到什么程度、不要说什么。这里写的比默认尺度优先。</p>
     </div>
-    </div>
-    </details>
     </details>
     <div class="field"><span class="lab">性格</span>
       <div class="chips" id="types"></div>
@@ -540,7 +535,7 @@ $("f-bad").oninput=e=>$("badv").textContent=e.target.value;
 $("f-jeal").oninput=e=>$("jealv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
-  if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-look").value=p.look||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-jeal").value=p.jeal||3;$("privBox").open=false;$("f-custom").value=p.custom||"";$("f-rules").value=p.rules||"";$("myPromptBox").open=false;$("myPromptTag").textContent=(p.custom||p.rules)?"　· 已写":"";$("jealv").textContent=p.jeal||3;$("f-voice").value=p.voice||"Charon"}
+  if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-look").value=p.look||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-jeal").value=p.jeal||3;$("f-custom").value=p.custom||"";$("f-rules").value=p.rules||"";$("myPromptBox").open=false;$("myPromptTag").textContent=(p.custom||p.rules)?"　· 已写":"";$("jealv").textContent=p.jeal||3;$("f-voice").value=p.voice||"Charon"}
   $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-azkey").value=CFG.azKey||"";$("f-azregion").value=CFG.azRegion||"";$("f-azvoice").value=CFG.azVoice||"zh-CN-YunxiNeural";if(CFG.azKey)$("azBox").open=true;
   $("f-elkey").value=CFG.elKey||"";$("f-elmodel").value=CFG.elModel||"eleven_flash_v2_5";fillElVoices();if(CFG.elKey)$("elBox").open=true;$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
