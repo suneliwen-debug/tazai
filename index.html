@@ -582,15 +582,18 @@ function fillModels(){
   sel.value=CFG.model;
 }
 function fallbacks(){
-  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model&&!(CFG.bad||[]).includes(n)&&ver(n)>=3);
-  const rank=n=>(/lite/.test(n)?1:0)+(/preview|exp/.test(n)?0.5:0);
-  return list.sort((a,b)=>rank(a)-rank(b)).slice(0,3);
+  // 每个模型的免费次数分开算：新的先试，旧的（2.x）也试，最后才轮到 Gemma
+  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model&&!(CFG.bad||[]).includes(n)&&!/(tts|image|live|audio)/.test(n));
+  const score=n=>ver(n)*10-(/lite/.test(n)?3:0)-(/preview|exp/.test(n)?1:0);
+  return list.sort((a,b)=>score(b)-score(a)).slice(0,6);
 }
 async function gemini(system,text,opts={}){
   if(!(CFG.models&&CFG.models.length)){try{await discover()}catch(e){}}
   const tried=[CFG.model,...fallbacks()];if(CFG.gemma)tried.push(CFG.gemma);let lastErr;
   for(let i=0;i<tried.length;i++){
-    try{return await geminiOnce(tried[i],system,text,opts)}
+    try{const j=await geminiOnce(tried[i],system,text,opts);
+      if(opts.json!==false&&j&&Array.isArray(j.messages)&&!clean(j.messages).length){const e=new Error("回复内容不对");e.busy=true;e.detail="bad content "+tried[i];throw e}
+      return j}
     catch(e){lastErr=e;if(!e.busy&&!e.gone)throw e;if(i===0&&e.busy)await new Promise(r=>setTimeout(r,1200))}
   }
   throw lastErr;
@@ -848,13 +851,14 @@ function splitInline(arr){
   return out;
 }
 function looksBroken(t){
-  if(/(boyfriend|toxic tongue|little fairy|persona|badness level|stage:|same age|角色设定|坏度\s*\d)/i.test(t))return true;
+  if(/(boyfriend|girlfriend|toxic|little fairy|persona|badness|rogue|bad boy|stage|same age|second generation|sarcastic|\d\s*\/\s*5|角色设定|人设|坏度\s*\d|关系阶段)/i.test(t))return true;
   const p=S.profile||{};if(p.lang==="mix"||p.lang==="my")return false;
-  const letters=(t.match(/[A-Za-z]/g)||[]).length;return t.length>25&&letters/t.length>0.45;
+  const letters=(t.match(/[A-Za-z]/g)||[]).length;return t.length>=6&&letters/t.length>0.35;
 }
 function clean(arr){
   if(!Array.isArray(arr))return[];
-  arr=splitInline(arr).filter(m=>!(m&&typeof m.text==="string"&&m.type!=="voice"&&looksBroken(m.text)));
+  arr=splitInline(arr);
+  if(arr.some(m=>m&&typeof m.text==="string"&&looksBroken(m.text)))return[]; // 有一行不对就整段重来
   return arr.slice(0,4).map(m=>{
     const type=["text","voice","photo","sticker"].includes(m&&m.type)?m.type:"text";
     if(type==="sticker")return STICKERS[m.sid]?{type,sid:m.sid}:null;
@@ -1007,7 +1011,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="28";
+const BUILD="30";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
