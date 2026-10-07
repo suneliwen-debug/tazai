@@ -707,9 +707,14 @@ async function tts(text,voice){
   for(const model of list){try{return await ttsOnce(model,text,voice)}catch(e){last=e;if(/404/.test(e.message)){CFG.ttsBad=[...(CFG.ttsBad||[]),model];store(KKEY,CFG)}}}
   throw last||new Error("tts none");
 }
+function ttsText(t){
+  // 省略号、破折号、波浪号容易让语音模型提早停，换成一般标点
+  return t.trim().replace(/[…]+|\.{2,}/g,"，").replace(/[—–]+/g,"，").replace(/[~～]+/g,"").replace(/《|》/g,"")
+    .replace(/，\s*([。！？])/g,"$1").replace(/，{2,}/g,"，").replace(/[^。！？.!?]$/,"$&。");
+}
 async function ttsOnce(model,text,voice){
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
-    body:JSON.stringify({contents:[{parts:[{text:text.trim().replace(/[^。！？.!?~～]$/,"$&。")}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
+    body:JSON.stringify({contents:[{parts:[{text:ttsText(text)}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
   if(!r.ok)throw new Error("tts "+r.status);
   const d=await r.json();const parts=d.candidates[0].content.parts.filter(p=>p.inlineData);
   const rate=+((parts[0].inlineData.mimeType||"").match(/rate=(\d+)/)||[])[1]||24000;
@@ -790,7 +795,7 @@ function bubble(m){
     const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
     b.onclick=()=>{b.classList.add("loading");
       onRobot=()=>{tx.hidden=false;t.textContent="收起";showNote(/429/.test(lastErr)?"他的 AI 声音今天的免费次数用完了，先看文字。明天再点就能听。":"AI 声音暂时出不来，先看文字，等一下再点试试。")};
-      playVoice("v6-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
+      playVoice("v7-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
         ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
     row.append(b);
     const t=document.createElement("button");t.className="totext";t.type="button";t.textContent="转文字";
@@ -862,6 +867,7 @@ ${p.look?"你的长相："+p.look+"。\n":""}说话：${lang}；像真人发微�
 - 先接住她刚说的话，正面回应，不自说自话。
 - 她说得对就认（可以嘴硬地认），不死咬同一个梗；同一种调侃整段聊天最多一次。
 - 大多发1条，偶尔2条，最多3条。
+- 她叫你唱歌时，不要写真实歌曲的歌词，自己随口编两句、哼几声（啦啦啦、嗯哼）或开玩笑带过。
 - 有常识：一般人7到9点起床，半夜清晨在睡觉很正常，不因为她没回而怪她；深夜就提醒她早点睡。
 - 底线：不写露骨性内容；不控制她的社交和自由，不威胁、不PUA、不冷暴力；不鼓励她伤害自己或乱花钱；不贬低她的外貌身材家庭。
 - 她如果很难过、绝望或想伤害自己，立刻收起痞气和毒舌，认真温柔陪她，鼓励她找信任的人或专业帮助（马来西亚 Befrienders 03-7627 2929）。`+
@@ -1058,7 +1064,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="33";
+const BUILD="34";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
