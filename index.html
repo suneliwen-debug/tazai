@@ -549,6 +549,8 @@ function renderProv(){const el=$("provs");el.innerHTML="";const cur=CFG.provider
   for(const k in PROVS){const b=document.createElement("button");b.type="button";b.textContent=PROVS[k];b.setAttribute("aria-pressed",cur===k);b.onclick=()=>{readCfg();CFG.provider=k;store(KKEY,CFG);renderProv()};el.append(b)}
   $("arkBox").hidden=cur!=="ark";$("dsBox").hidden=cur!=="deepseek";$("gemLab").textContent=cur!=="gemini"?"Gemini API key（用来发语音和后备，建议也填）":"Gemini API key";}
 function hasChatKey(){return CFG.provider==="ark"?!!CFG.arkKey:CFG.provider==="deepseek"?!!CFG.dsKey:!!CFG.key}
+// 聊天请求最多等 30 秒，超时就当网络问题重试，不会一直卡在「正在输入」
+function fetchT(u,o,ms=30000){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);return fetch(u,{...o,signal:c.signal}).finally(()=>clearTimeout(t))}
 async function chatAI(system,text,opts={}){
   if(CFG.provider==="ark")return ark(system,text,opts);
   if(CFG.provider==="deepseek"){try{return await deepseek(system,text,opts)}catch(e){if(CFG.key&&e.busy)return gemini(system,text,opts);throw e}}
@@ -559,7 +561,7 @@ async function deepseek(system,text,{max=500}={}){
   const body={model:CFG.dsModel||"deepseek-flash",messages:[{role:"system",content:system},{role:"user",content:text}],temperature:1.1,max_tokens:Math.max(max,800),response_format:{type:"json_object"}};
   let r,data;
   for(let i=0;i<2;i++){
-    try{r=await fetch("https://api.deepseek.com/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.dsKey},body:JSON.stringify(body)})}
+    try{r=await fetchT("https://api.deepseek.com/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.dsKey},body:JSON.stringify(body)})}
     catch(e){const er=new Error("连不上 DeepSeek（可能是网络，或它不让网页直接连）");er.busy=true;er.detail="network deepseek";throw er}
     data=await r.json().catch(()=>({}));
     if(r.status===404&&!CFG.dsModel){body.model="deepseek-chat";continue} // 旧名字
@@ -581,8 +583,8 @@ async function ark(system,text,{max=500}={},noThink=true){
   if(noThink)body.thinking={type:"disabled"};
   let r,data;
   for(let i=0;i<2;i++){
-    try{r=await fetch("https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.arkKey},body:JSON.stringify(body)})}
-    catch(e){throw new Error("连不上豆包。可能是网络问题，也可能是豆包不允许网页直接连接（这种情况跟 Claude 说，我改用 n8n 转接）。")}
+    try{r=await fetchT("https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.arkKey},body:JSON.stringify(body)})}
+    catch(e){if(e&&e.name==="AbortError")throw new Error("豆包回得太慢，超时了。");throw new Error("连不上豆包。可能是网络问题，也可能是豆包不允许网页直接连接（这种情况跟 Claude 说，我改用 n8n 转接）。")}
     data=await r.json().catch(()=>({}));
     if(r.status>=500||r.status===429){if(i===0){await new Promise(x=>setTimeout(x,1500));continue}}
     break;
@@ -695,10 +697,10 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false,noT
     else if(ver(model)>=3||/latest/.test(model))gc.thinkingConfig=thinkMode==="low"?{thinkingLevel:"low"}:{thinkingLevel:"minimal"};
   }
   let r;
-  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
+  try{r=await fetchT(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
     body:JSON.stringify({...(isGemma?{}:{systemInstruction:{parts:[{text:system}]}}),contents:isGemma&&json?gemmaTurns(system,text):[{role:"user",parts:[{text:isGemma?system+"\n\n"+text:text}]}],generationConfig:gc,
       safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
-  catch(e){throw new Error("连不上网络，检查一下网络再试。")}
+  catch(e){const er=new Error(e&&e.name==="AbortError"?"他回得太慢，超时了。":"连不上网络，检查一下网络再试。");er.busy=true;throw er}
   const data=await r.json().catch(()=>({}));
   if(r.status===400&&gc.thinkingConfig&&/think/i.test((data&&data.error&&data.error.message)||"")){
     // 这个模型不接受这个设定：先试 low，再不行就不设
@@ -1166,7 +1168,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="45";
+const BUILD="46";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
