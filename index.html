@@ -346,6 +346,7 @@ input[type=range]{accent-color:var(--accent);width:100%}
     <header class="top">
       <div class="av" id="hAv"></div>
       <div class="who"><b id="hName"></b><small id="hStatus">在线</small></div>
+      <a id="balChip" href="https://platform.deepseek.com/top_up" target="_blank" rel="noopener" hidden style="font-size:13px;padding:6px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:inherit;text-decoration:none;white-space:nowrap;margin-right:6px">💰 …</a>
       <button class="iconbtn" id="edit">设定</button>
     </header>
     <main class="thread" id="thread" aria-live="polite"></main>
@@ -563,6 +564,20 @@ async function dsBalance(){
   }catch(e){el.textContent="连不上，等下再试"}
 }
 $("dsBalBtn").onclick=dsBalance;
+// 聊天页右上角显示余额，点了去充值
+let balAt=0;
+async function headerBal(force){
+  const c=$("balChip");
+  if(CFG.provider!=="deepseek"||!CFG.dsKey){c.hidden=true;return}
+  c.hidden=false;
+  if(!force&&Date.now()-balAt<5*6e4)return;balAt=Date.now();
+  try{const r=await fetchT("https://api.deepseek.com/user/balance",{headers:{"Authorization":"Bearer "+CFG.dsKey}},15000);const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.balance_infos){c.textContent="💰 充值";return}
+    const b=d.balance_infos[0],v=+b.total_balance,sym={USD:"$",CNY:"¥"}[b.currency]||b.currency+" ";
+    c.textContent=(v<1||!d.is_available?"⚠️ ":"💰 ")+sym+v.toFixed(2);
+    c.style.color=v<1||!d.is_available?"#d9577a":"inherit";
+  }catch(e){c.textContent="💰 充值"}
+}
 async function chatAI(system,text,opts={}){
   if(CFG.provider==="ark")return ark(system,text,opts);
   if(CFG.provider==="deepseek"){try{return await deepseek(system,text,opts)}catch(e){if(CFG.key&&e.busy)return gemini(system,text,opts);throw e}}
@@ -960,7 +975,7 @@ $("aiNote").addEventListener("click",()=>{const n=$("aiNote");if(n.dataset.retry
 function showChat(){
   const p=S.profile;$("setup").hidden=true;$("chatView").hidden=false;
   paintAv($("hAv"),p.photo,p.color,p.name);$("hName").textContent=p.name;
-  renderThread();resetIdle();
+  renderThread();resetIdle();headerBal(true);
 }
 
 /* ---------- prompts (kept short to save tokens) ---------- */
@@ -1066,7 +1081,7 @@ async function reply(){
   if(!ok){lastErrDetail=(err&&(err.message+(err.detail?"（"+err.detail+"）":"")))||"";
     const quota=/429|次数|quota|RESOURCE_EXHAUSTED/i.test(lastErrDetail);
     showNote(/key/.test(lastErrDetail)?lastErrDetail:(quota?"今天的免费聊天次数好像用完了，过一阵子再点这里重试 ↻":"他好像信号不太好，没收到。点这里让他再看一次 ↻")+"\n"+lastErrDetail.slice(0,90),true);$("aiNote").dataset.retry="1"}
-  busy=false;resetIdle();
+  busy=false;resetIdle();headerBal();
   // 他回复期间你又发了消息 → 接着回
   const last=S.msgs[S.msgs.length-1];
   if(ok&&(pendingReply||(last&&last.from==="me"&&S.msgs.length>upto)))setTimeout(reply,300);
@@ -1180,7 +1195,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="47";
+const BUILD="48";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
