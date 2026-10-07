@@ -278,8 +278,8 @@ input[type=range]{accent-color:var(--accent);width:100%}
       <div hidden><input id="f-azkey"><input id="f-azregion"><select id="f-azvoice"><option value="zh-CN-YunxiNeural">x</option></select><details id="azBox"></details></div>
       <label for="f-vfreq">他多常发语音</label>
       <select id="f-vfreq">
-        <option value="low">偶尔（每 5 次左右一次）</option>
-        <option value="mid" selected>常常（每 2–3 次一次）</option>
+        <option value="low" selected>偶尔（每 5 次左右一次）</option>
+        <option value="mid">常常（每 2–3 次一次）</option>
         <option value="high">很常（大部分都发语音）</option>
         <option value="all">全部都发语音</option>
       </select>
@@ -421,6 +421,7 @@ function store(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}ca
 let S=load(SKEY)||{profile:null,msgs:[],lastSeen:0,notes:[]};
 S.notes=S.notes||[];
 let CFG=load(KKEY)||{key:"",model:"gemini-flash-latest"};
+if(!CFG.vfreqReset){CFG.vfreq="low";CFG.vfreqReset=1;try{localStorage.setItem(KKEY,JSON.stringify(CFG))}catch(e){}}
 if(/^gemini-2\./.test(CFG.model||"")){CFG.models=[];CFG.model="gemini-flash-latest"}
 function save(){S.msgs=S.msgs.slice(-400);store(SKEY,S)}
 
@@ -545,7 +546,7 @@ $("f-jeal").oninput=e=>$("jealv").textContent=e.target.value;
 function openSetup(){if(CFG.provider==="deepseek"&&CFG.dsKey)setTimeout(dsBalance,300);
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-look").value=p.look||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-jeal").value=p.jeal||3;$("f-custom").value=p.custom||"";$("f-rules").value=p.rules||"";$("myPromptBox").open=false;$("myPromptTag").textContent=(p.custom||p.rules)?"　· 已写":"";$("jealv").textContent=p.jeal||3;$("f-voice").value=p.voice||"Charon"}
-  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-vfreq").value=CFG.vfreq||"mid";$("f-azkey").value=CFG.azKey||"";$("f-azregion").value=CFG.azRegion||"";$("f-azvoice").value=CFG.azVoice||"zh-CN-YunxiNeural";if(CFG.azKey)$("azBox").open=true;
+  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-vfreq").value=CFG.vfreq||"low";$("f-azkey").value=CFG.azKey||"";$("f-azregion").value=CFG.azRegion||"";$("f-azvoice").value=CFG.azVoice||"zh-CN-YunxiNeural";if(CFG.azKey)$("azBox").open=true;
   $("f-elkey").value=CFG.elKey||"";$("f-elmodel").value=CFG.elModel||"eleven_flash_v2_5";fillElVoices();if(CFG.elKey)$("elBox").open=true;$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
@@ -1012,7 +1013,7 @@ inner：你此刻心里真正的想法，不会说出口的那种，一两句口
 type："text"文字；"voice"语音（text填口语的话，20到60字；${VFREQ()}；她叫你发语音、唱歌、说晚安早安时一定用语音）；"photo"分享你用手机拍的照片，带"prompt"、"scene"和"caption"：prompt 用英文写这张照片的画面（像真人随手拍：first-person phone photo, candid, natural light，写清楚地点、东西、光线、时间感；如果照片里有你自己，例如自拍或镜子自拍，要写出你的长相；不要文字、不要水印）；scene 从这里选一个最接近的：${Object.keys(SCENES).join(",")}；caption 是你配的一句话。分享日常时偶尔发，她叫你发照片、自拍时一定发。
 "sticker"表情包，带"sid"，只能从这里选：${Object.entries(STICKERS).map(([k,v])=>k+"("+v[1]+")").join(",")}；像真人一样偶尔用，常常放在一句话后面，或她发表情包时回一个。
 remember：她这次透露的值得长期记住的新事实（例如生日、工作、喜好），一句话；没有就留空。`;
-function VFREQ(){return {low:"大约每5次回复用一次",mid:"大约每2到3次回复就用一次语音",high:"大部分回复都用语音，偶尔才打字",all:"每次回复都至少有一条语音，最好整段都用语音"}[CFG.vfreq||"mid"]}
+function VFREQ(){return {low:"大约每5次回复用一次",mid:"大约每2到3次回复就用一次语音",high:"大部分回复都用语音，偶尔才打字",all:"每次回复都至少有一条语音，最好整段都用语音"}[CFG.vfreq||"low"]}
 function FMT(){
   const sc=albumScenes();
   if(!sc.length)return FORMAT_BASE_F();
@@ -1205,7 +1206,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="50";
+const BUILD="51";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
