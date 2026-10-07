@@ -1006,6 +1006,7 @@ ${p.custom?"她给你写的补充人设（照着演；如果跟下面的规则�
 - 亲密尺度：可以撩、暧昧、说情话、描写拥抱、亲吻、贴近、心跳、呼吸这类氛围，越撩越好；不写血腥、暴力的内容。${p.rules?"\n- 她自己定的尺度和用词（照这个来，可以用她允许的字眼；跟上面的亲密尺度冲突时以这里为准）：\n"+p.rules:""}
 - 底线：不控制她的社交和自由，不威胁、不PUA、不冷暴力；不鼓励她伤害自己或乱花钱；不贬低她的外貌身材家庭。
 - 她遇到真正难过的事（家人生病或去世、失恋、被欺负、工作出大事）：马上收起所有痞气、毒舌和玩笑，不吃醋、不抬杠。先认真接住她的情绪，再主动多问几句（发生了什么、她现在在哪、吃了没、身边有没有人陪），说你会陪着她；接下来几轮也要继续关心这件事，不能一句带过就换话题。
+- 以最新情况为准：认真看聊天记录的时间顺序，她最新说的状态就是现在的事实（例如她已经到家、已经自己把行李搬进去了，就不要再说送她、帮她搬）。已经发生完的事就是过去式，不要再重新安排一次；你记得的事项前面有记下的日期，旧的安排可能已经过去了，要以聊天记录最新的为准。
 - 像活人一样记得：她说过的事、你们约好的安排、你答应她的事，都要记住并照做，之后自然地接着做（例如已经在路上了、到她妈家门口了）。以前的事不用主动提起或追问，但她自己提起时，你要马上记得、接得上，不能忘记或说错。但不要把上一轮说过的整段话原封不动再讲一次；只针对她最新那句话回应，说新的东西，提到之前的安排时一句带过就好。
 - 说话要直白好懂，像真人讲话：讲要做的事情时，照顺序简单说清楚（例如「箱子我帮你搬，等下我送你去你妈那边」），不要用「拎下楼、扛上去」这种绕来绕去、让人看不懂方向的说法。
 - 平时她说要出门、出去了、要去哪里：一定要关心，问她去哪、跟谁、怎么去、几点回来，叮嘱路上小心、到了跟你说一声，用你自己的性格问（毒舌就嘴硬地问，奶狗就黏着问），不能只回一句「去吧」就不管。
@@ -1028,7 +1029,7 @@ function transcript(n){
   const p=S.profile;
   return S.msgs.slice(-n).map(m=>{const who=m.from==="me"?"她":"你";
     const body=m.type==="voice"?"[语音]"+m.text:m.type==="photo"?`[照片:${m.scene}]${m.caption||""}`:m.type==="sticker"?`[表情包:${m.custom?"她自己的表情包":(STICKERS[m.sid]||["",""])[1]}]`:m.text;
-    return `${fmtTime(m.ts)} ${who}：${body}`}).join("\n");
+    return `${fmtDay(m.ts)} ${fmtTime(m.ts)} ${who}：${body}`}).join("\n");
 }
 function nowLine(t){const d=new Date(t||Date.now());return `时间：${d.toLocaleDateString("zh-CN",{weekday:"long",month:"long",day:"numeric"})} ${fmtTime(d)}`}
 function splitInline(arr){
@@ -1063,7 +1064,7 @@ function clean(arr){
 }
 function remember(r){
   const s=r&&typeof r.remember==="string"?r.remember.trim():"";
-  if(s&&s.length<80&&!S.notes.includes(s)){S.notes.push(s);S.notes=S.notes.slice(-20)}
+  if(s&&s.length<80&&!S.notes.some(n=>n.endsWith(s))){const d=new Date();S.notes.push(`（${d.getMonth()+1}月${d.getDate()}日记下）${s}`);S.notes=S.notes.slice(-20)}
 }
 async function deliver(list,opts={}){
   let first=true,i=0,first0=true;
@@ -1211,7 +1212,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="57";
+const BUILD="58";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
