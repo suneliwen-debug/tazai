@@ -72,6 +72,8 @@ a{color:var(--accent)}
 .pop{animation:pop .28s cubic-bezier(.2,.8,.3,1.2)}
 @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}}
 .note.err{cursor:pointer}
+.azbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.azbox summary{cursor:pointer;font-size:14px;font-weight:600}
 .peek{border:1px dashed var(--accent);background:transparent;border-radius:14px;padding:6px 12px;margin:2px 0 6px;text-align:left;max-width:100%;color:var(--accent);font-size:12.5px;display:flex;flex-direction:column;gap:4px}
 .peek .pk-t{display:none;color:var(--ink);font-size:14px;font-style:italic;line-height:1.5}
 .peek.open{background:var(--chip);border-style:solid}
@@ -244,6 +246,28 @@ input[type=range]{accent-color:var(--accent);width:100%}
         <option value="Rasalgethi">磁性讲述</option>
       </select>
       <div class="chips"><button type="button" id="testVoice">试听</button></div>
+      <details class="azbox" id="azBox">
+        <summary>用微软 Azure 语音（更自然、每月 50 万字免费）</summary>
+        <div class="field" style="margin-top:10px">
+          <label for="f-azkey">Azure 语音 key</label>
+          <input type="password" id="f-azkey" autocomplete="off" placeholder="贴上 KEY 1">
+          <div class="two">
+            <div class="field"><label for="f-azregion">地区 Region</label><input type="text" id="f-azregion" autocomplete="off" placeholder="southeastasia"></div>
+            <div class="field"><label for="f-azvoice">Azure 男声</label>
+              <select id="f-azvoice">
+                <option value="zh-CN-YunxiNeural">云希（阳光少年）</option>
+                <option value="zh-CN-YunzeNeural">云泽（成熟温柔）</option>
+                <option value="zh-CN-YunjianNeural">云健（有力霸气）</option>
+                <option value="zh-CN-YunyeNeural">云野（低沉磁性）</option>
+                <option value="zh-CN-YunfengNeural">云枫（随性）</option>
+                <option value="zh-CN-YunhaoNeural">云皓（明亮）</option>
+                <option value="zh-CN-YunyangNeural">云扬（播音腔）</option>
+                <option value="zh-TW-YunJheNeural">云哲（台湾腔）</option>
+              </select></div>
+          </div>
+          <p class="note" style="text-align:left;padding:0">填了 Azure 就优先用 Azure，Azure 不行才用 Gemini 的声音。按上面的「试听」可以听。</p>
+        </div>
+      </details>
       <label class="note" style="text-align:left;padding:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-robot"> AI 声音用完时，改用手机自带的声音（比较像机器人）</label>
       <p class="note" style="text-align:left;padding:0" id="voiceNote">用 Gemini 的 AI 声音；免费额度用完时，会改用手机自带的声音。</p>
     </div>
@@ -504,13 +528,13 @@ $("f-jeal").oninput=e=>$("jealv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-look").value=p.look||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-jeal").value=p.jeal||3;$("jealv").textContent=p.jeal||3;$("f-voice").value=p.voice||"Charon"}
-  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
+  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-azkey").value=CFG.azKey||"";$("f-azregion").value=CFG.azRegion||"";$("f-azvoice").value=CFG.azVoice||"zh-CN-YunxiNeural";if(CFG.azKey)$("azBox").open=true;$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
 function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;
-  CFG.robotOK=$("f-robot").checked;CFG.dsKey=$("f-dskey").value.trim();CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"dola-seed-2-1-turbo-260628";store(KKEY,CFG)}
+  CFG.robotOK=$("f-robot").checked;CFG.azKey=$("f-azkey").value.trim();CFG.azRegion=($("f-azregion").value.trim()||"southeastasia").toLowerCase().replace(/\s+/g,"");CFG.azVoice=$("f-azvoice").value;CFG.dsKey=$("f-dskey").value.trim();CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"dola-seed-2-1-turbo-260628";store(KKEY,CFG)}
 const PROVS={gemini:"Gemini（免费）",deepseek:"DeepSeek（便宜稳定）",ark:"豆包"};
 function renderProv(){const el=$("provs");el.innerHTML="";const cur=CFG.provider||"gemini";
   for(const k in PROVS){const b=document.createElement("button");b.type="button";b.textContent=PROVS[k];b.setAttribute("aria-pressed",cur===k);b.onclick=()=>{readCfg();CFG.provider=k;store(KKEY,CFG);renderProv()};el.append(b)}
@@ -711,7 +735,18 @@ function gemmaParse(out){
   if(!lines.length)return null;
   return{messages:lines.slice(0,4).map(l=>({type:"text",text:l})),remember:""};
 }
+function xmlEsc(t){return t.replace(/[<>&'"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;","'":"&apos;",'"':"&quot;"}[c]))}
+async function azureTTS(text){
+  const v=CFG.azVoice||"zh-CN-YunxiNeural",lang=v.slice(0,5);
+  const ssml=`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${v}"><prosody rate="+4%">${xmlEsc(ttsText(text))}</prosody></voice></speak>`;
+  const r=await fetch(`https://${CFG.azRegion||"southeastasia"}.tts.speech.microsoft.com/cognitiveservices/v1`,{method:"POST",
+    headers:{"Ocp-Apim-Subscription-Key":CFG.azKey,"Content-Type":"application/ssml+xml","X-Microsoft-OutputFormat":"audio-24khz-48kbitrate-mono-mp3"},body:ssml});
+  if(!r.ok)throw new Error("azure "+r.status);
+  const b=await r.blob();if(!b.size)throw new Error("azure empty");return b;
+}
 async function tts(text,voice){
+  if(CFG.azKey){try{lastVoiceSrc="azure";return await azureTTS(text)}catch(e){lastErr=e.message}}
+  lastVoiceSrc="gemini";
   if(!CFG.key)throw new Error("no key");
   const list=[...new Set([...(CFG.ttsList||[]),CFG.tts||"gemini-2.5-flash-preview-tts"])].filter(n=>!(CFG.ttsBad||[]).includes(n));
   let last;
@@ -776,7 +811,7 @@ function deviceSpeak(text,onend){
     const v=zh.find(v=>/male|男/i.test(v.name)&&!/female/i.test(v.name))||zh[0];if(v)u.voice=v;u.lang=v?v.lang:"zh-CN";u.pitch=1;u.rate=0.95;
     u.onend=u.onerror=onend;speechSynthesis.speak(u)}catch(e){onend&&onend()}
 }
-let lastSource="";
+let lastSource="",lastVoiceSrc="";
 async function playVoice(key,text,voice,onstart,onend){
   try{speechSynthesis.cancel()}catch(e){} if(curAudio){curAudio.pause();curAudio=null}
   let blob=key?await idb.get(key):null;
@@ -790,7 +825,7 @@ async function playVoice(key,text,voice,onstart,onend){
 let onRobot=null;
 $("testVoice").onclick=async()=>{readCfg();const b=$("testVoice");b.textContent="生成中…";
   await playVoice(null,"在吗？我想你了。今天有没有好好吃饭？",$("f-voice").value,()=>{b.textContent="播放中…";
-    $("voiceNote").textContent=lastSource==="ai"?"现在播放的是 Gemini AI 声音。不喜欢就换上面的声音再试听。":
+    $("voiceNote").textContent=lastSource==="ai"&&lastVoiceSrc==="azure"?"现在播放的是 Azure 声音 ✓":lastSource==="ai"?(CFG.azKey?"Azure 连不上（"+lastErr+"），现在播放的是 Gemini 声音。":"现在播放的是 Gemini AI 声音。")+"不喜欢就换上面的声音再试听。":
       (CFG.key?"AI 声音暂时用不了（"+(/429/.test(lastErr)?"免费语音额度用完了":"出错了")+"），现在是手机自带的声音。":"还没贴 Gemini key，现在是手机自带的声音。先在下面贴 key，再回来试听 AI 声音。")},
     ()=>b.textContent="试听")};
 
@@ -806,7 +841,7 @@ function bubble(m){
     const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
     b.onclick=()=>{b.classList.add("loading");
       onRobot=()=>{tx.hidden=false;t.textContent="收起";showNote(/429/.test(lastErr)?"他的 AI 声音今天的免费次数用完了，先看文字。明天再点就能听。":"AI 声音暂时出不来，先看文字，等一下再点试试。")};
-      playVoice("v7-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
+      playVoice("v8-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
         ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
     row.append(b);
     const t=document.createElement("button");t.className="totext";t.type="button";t.textContent="转文字";
@@ -1085,7 +1120,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="36";
+const BUILD="37";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次

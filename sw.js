@@ -1,6 +1,6 @@
 // 网络优先：有网就拿最新版（最多等 3 秒），没网才用手机里的缓存
 // 聊天记录和 API key 只存在手机本地，不经过这里
-const CACHE = 'tazai-v36';
+const CACHE = 'tazai-v37';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192-v3.png', 'icons/icon-512-v3.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
