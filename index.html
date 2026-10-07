@@ -828,13 +828,30 @@ function deviceSpeak(text,onend){
     u.onend=u.onerror=onend;speechSynthesis.speak(u)}catch(e){onend&&onend()}
 }
 let lastSource="",lastVoiceSrc="";
+// 用 Web Audio 播放：先剪掉结尾杂音，最后淡出，避免喇叭在结尾「滋」一声
+let actx=null,curSrc=null;
+async function playClean(blob,onend){
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")await actx.resume();
+    const buf=await actx.decodeAudioData(await blob.arrayBuffer());
+    const ch=buf.getChannelData(0),rate=buf.sampleRate;
+    const i16=new Int16Array(ch.length);for(let i=0;i<ch.length;i++)i16[i]=Math.max(-32768,Math.min(32767,Math.round(ch[i]*32767)));
+    const keep=Math.min(ch.length,trimTail(i16,rate).length);
+    const nb=actx.createBuffer(1,keep,rate);nb.getChannelData(0).set(ch.subarray(0,keep));
+    if(curSrc){try{curSrc.stop()}catch(e){}}
+    const src=actx.createBufferSource(),g=actx.createGain();src.buffer=nb;src.connect(g);g.connect(actx.destination);
+    const dur=keep/rate,t=actx.currentTime;g.gain.setValueAtTime(1,t);g.gain.setValueAtTime(1,t+Math.max(0,dur-0.12));g.gain.linearRampToValueAtTime(0,t+dur);
+    src.onended=()=>{if(curSrc===src)curSrc=null;onend&&onend()};curSrc=src;src.start();
+    return true;
+  }catch(e){return false}
+}
 async function playVoice(key,text,voice,onstart,onend){
-  try{speechSynthesis.cancel()}catch(e){} if(curAudio){curAudio.pause();curAudio=null}
+  try{speechSynthesis.cancel()}catch(e){} if(curAudio){curAudio.pause();curAudio=null}if(curSrc){try{curSrc.stop()}catch(e){}curSrc=null}
   let blob=key?await idb.get(key):null;
   if(!blob){try{blob=await tts(text,voice);if(key)idb.set(key,blob)}catch(e){blob=null;lastErr=e&&e.message||""}}
   lastSource=blob?"ai":"device";
   onstart&&onstart();
-  if(blob){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>{onend&&onend()})}
+  if(blob){if(!(await playClean(blob,onend))){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>{onend&&onend()})}}
   else if(CFG.robotOK)deviceSpeak(text,onend);
   else{onend&&onend();onRobot&&onRobot()}
 }
@@ -1136,7 +1153,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="38";
+const BUILD="39";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
