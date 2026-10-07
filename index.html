@@ -483,17 +483,28 @@ async function gemini(system,text,opts={}){
   }
   throw lastErr;
 }
-async function geminiOnce(model,system,text,{max=500,json=true,retried=false}={}){
+async function geminiOnce(model,system,text,{max=500,json=true,retried=false,noThink=false}={}){
   if(!CFG.key)throw new Error("还没有设定 Gemini API key。");
   const gc={temperature:1,maxOutputTokens:Math.max(max,2048)}; // 留空间给模型思考，实际回复仍然很短
   if(json)gc.responseMimeType="application/json";
-  if(/^gemini-2\.5/.test(model))gc.thinkingConfig={thinkingBudget:0};
+  // 关掉/调低「思考」，回复快很多
+  const thinkMode=(CFG.thinkMode||{})[model];
+  if(!noThink&&thinkMode!=="none"){
+    if(/^gemini-2\.5/.test(model))gc.thinkingConfig={thinkingBudget:0};
+    else if(ver(model)>=3||/latest/.test(model))gc.thinkingConfig=thinkMode==="low"?{thinkingLevel:"low"}:{thinkingLevel:"minimal"};
+  }
   let r;
   try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
     body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:"user",parts:[{text}]}],generationConfig:gc,
       safetySettings:["HARM_CATEGORY_HARASSMENT","HARM_CATEGORY_HATE_SPEECH","HARM_CATEGORY_DANGEROUS_CONTENT"].map(category=>({category,threshold:"BLOCK_ONLY_HIGH"}))})})}
   catch(e){throw new Error("连不上网络，检查一下网络再试。")}
   const data=await r.json().catch(()=>({}));
+  if(r.status===400&&gc.thinkingConfig&&/think/i.test((data&&data.error&&data.error.message)||"")){
+    // 这个模型不接受这个设定：先试 low，再不行就不设
+    CFG.thinkMode=CFG.thinkMode||{};const cur=CFG.thinkMode[model];
+    CFG.thinkMode[model]=(!cur&&gc.thinkingConfig.thinkingLevel==="minimal")?"low":"none";store(KKEY,CFG);
+    return geminiOnce(model,system,text,{max,json,retried});
+  }
   if(r.status===404&&!retried){
     const raw=(data&&data.error&&data.error.message)||"";
     CFG.bad=[...new Set([...(CFG.bad||[]),model])];
@@ -674,13 +685,13 @@ function remember(r){
   if(s&&s.length<80&&!S.notes.includes(s)){S.notes.push(s);S.notes=S.notes.slice(-20)}
 }
 async function deliver(list,opts={}){
-  let first=true,i=0;
+  let first=true,i=0,first0=true;
   for(const m of list){
     const msg={from:"him",...m,ts:opts.ts?opts.ts+i*45e3:Date.now()};i++;
     if(opts.away&&first)msg.awayMark=true;
     first=false;
-    if(!opts.instant){showTyping(true);await new Promise(r=>setTimeout(r,500+Math.min(2500,(m.text||m.caption||"").length*60)));showTyping(false)}
-    S.msgs.push(msg);save();renderThread();
+    if(!opts.instant){showTyping(true);await new Promise(r=>setTimeout(r,first0?150:350+Math.min(1200,(m.text||m.caption||"").length*30)));showTyping(false)}
+    first0=false;S.msgs.push(msg);save();renderThread();
   }
 }
 async function reply(){
@@ -737,7 +748,7 @@ $("form").addEventListener("submit",e=>{
   e.preventDefault();const text=ta.value.trim();if(!text)return;
   if(rec&&recOn)rec.stop();
   S.msgs.push({from:"me",type:"text",text,ts:Date.now()});S.lastSeen=Date.now();ta.value="";ta.style.height="auto";save();renderThread();
-  clearTimeout(window._rt);window._rt=setTimeout(reply,1500); // 等一下，让你可以连发几句，只调用一次 AI
+  clearTimeout(window._rt);window._rt=setTimeout(reply,700); // 等一下，让你可以连发几句，只调用一次 AI
 });
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,recOn=false,base="";
 if(SR){
@@ -756,7 +767,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="15";
+const BUILD="16";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
