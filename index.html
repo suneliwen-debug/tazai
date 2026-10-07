@@ -234,6 +234,7 @@ input[type=range]{accent-color:var(--accent);width:100%}
         <option value="Rasalgethi">磁性讲述</option>
       </select>
       <div class="chips"><button type="button" id="testVoice">试听</button></div>
+      <label class="note" style="text-align:left;padding:0;display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-robot"> AI 声音用完时，改用手机自带的声音（比较像机器人）</label>
       <p class="note" style="text-align:left;padding:0" id="voiceNote">用 Gemini 的 AI 声音；免费额度用完时，会改用手机自带的声音。</p>
     </div>
 
@@ -492,13 +493,13 @@ $("f-bad").oninput=e=>$("badv").textContent=e.target.value;
 function openSetup(){
   const p=S.profile;
   if(p){draft={type:p.type,lang:p.lang,stage:p.stage,color:p.color,photo:p.photo||""};$("f-name").value=p.name;$("f-you").value=p.you;$("f-job").value=p.job||"";$("f-look").value=p.look||"";$("f-age").value=p.age;$("f-bad").value=p.bad;$("badv").textContent=p.bad;$("f-voice").value=p.voice||"Charon"}
-  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
+  $("f-key").value=CFG.key||"";$("f-arkkey").value=CFG.arkKey||"";$("f-dskey").value=CFG.dsKey||"";$("f-robot").checked=!!CFG.robotOK;$("f-arkmodel").value=CFG.arkModel||"";fillModels();renderProv();
   $("setup").classList.toggle("editing",!!p);$("setupTitle").textContent=p?"他的设定":"捏一个只属于你的他";
   $("cancelSetup").hidden=!p;$("dangerZone").hidden=!p;$("save").textContent=p?"保存":"开始和他聊天";
   renderSetup();$("setup").hidden=false;$("chatView").hidden=true;
 }
 function readCfg(){const k=$("f-key").value.trim();if(k!==CFG.key){CFG.models=[];CFG.tts=""}CFG.key=k;CFG.model=$("f-model").value||CFG.model;
-  CFG.dsKey=$("f-dskey").value.trim();CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"dola-seed-2-1-turbo-260628";store(KKEY,CFG)}
+  CFG.robotOK=$("f-robot").checked;CFG.dsKey=$("f-dskey").value.trim();CFG.arkKey=$("f-arkkey").value.trim();CFG.arkModel=$("f-arkmodel").value.trim()||"dola-seed-2-1-turbo-260628";store(KKEY,CFG)}
 const PROVS={gemini:"Gemini（免费）",deepseek:"DeepSeek（便宜稳定）",ark:"豆包"};
 function renderProv(){const el=$("provs");el.innerHTML="";const cur=CFG.provider||"gemini";
   for(const k in PROVS){const b=document.createElement("button");b.type="button";b.textContent=PROVS[k];b.setAttribute("aria-pressed",cur===k);b.onclick=()=>{readCfg();CFG.provider=k;store(KKEY,CFG);renderProv()};el.append(b)}
@@ -613,6 +614,7 @@ async function discover(){
   const gem=names.filter(n=>/^gemma-\d/.test(n)&&/-it$/.test(n)&&!/(e2b|e4b|1b)/.test(n)).sort((a,b)=>{const g=n=>parseFloat((n.match(/gemma-(\d+)/)||[])[1]||0)*1000+parseFloat((n.match(/(\d+)b-it/)||[])[1]||0);return g(b)-g(a)});
   CFG.gemma=gem[0]||"";
   CFG.tts=pickTts(names)||"gemini-2.5-flash-preview-tts";
+  CFG.ttsList=names.filter(n=>/tts/.test(n)).sort((a,b)=>ver(b)-ver(a)-(/lite/.test(b)?0.1:0)+(/lite/.test(a)?0.1:0));
   store(KKEY,CFG);fillModels();return chat;
 }
 function fillModels(){
@@ -700,7 +702,13 @@ function gemmaParse(out){
 }
 async function tts(text,voice){
   if(!CFG.key)throw new Error("no key");
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.tts||"gemini-2.5-flash-preview-tts"}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
+  const list=[...new Set([...(CFG.ttsList||[]),CFG.tts||"gemini-2.5-flash-preview-tts"])].filter(n=>!(CFG.ttsBad||[]).includes(n));
+  let last;
+  for(const model of list){try{return await ttsOnce(model,text,voice)}catch(e){last=e;if(/404/.test(e.message)){CFG.ttsBad=[...(CFG.ttsBad||[]),model];store(KKEY,CFG)}}}
+  throw last||new Error("tts none");
+}
+async function ttsOnce(model,text,voice){
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":CFG.key},
     body:JSON.stringify({contents:[{parts:[{text:text.trim().replace(/[^。！？.!?~～]$/,"$&。")}]}],generationConfig:{responseModalities:["AUDIO"],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice||"Charon"}}}}})});
   if(!r.ok)throw new Error("tts "+r.status);
   const d=await r.json();const parts=d.candidates[0].content.parts.filter(p=>p.inlineData);
@@ -759,9 +767,11 @@ async function playVoice(key,text,voice,onstart,onend){
   if(!blob){try{blob=await tts(text,voice);if(key)idb.set(key,blob)}catch(e){blob=null;lastErr=e&&e.message||""}}
   lastSource=blob?"ai":"device";
   onstart&&onstart();
-  if(blob){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>deviceSpeak(text,onend))}
-  else deviceSpeak(text,onend);
+  if(blob){const a=new Audio(URL.createObjectURL(blob));curAudio=a;a.onended=a.onerror=()=>{onend&&onend()};a.play().catch(()=>{onend&&onend()})}
+  else if(CFG.robotOK)deviceSpeak(text,onend);
+  else{onend&&onend();onRobot&&onRobot()}
 }
+let onRobot=null;
 $("testVoice").onclick=async()=>{readCfg();const b=$("testVoice");b.textContent="生成中…";
   await playVoice(null,"在吗？我想你了。今天有没有好好吃饭？",$("f-voice").value,()=>{b.textContent="播放中…";
     $("voiceNote").textContent=lastSource==="ai"?"现在播放的是 Gemini AI 声音。不喜欢就换上面的声音再试听。":
@@ -779,6 +789,7 @@ function bubble(m){
     b.innerHTML='<span class="play">▶</span><span class="wave"></span><span class="dur">'+secs+'″</span>';
     const w=b.querySelector(".wave");for(let i=0;i<Math.min(22,6+secs);i++){const x=document.createElement("i");x.style.height=(6+Math.abs(Math.sin(i*1.7+secs))*14)+"px";x.style.animationDelay=(i*.05)+"s";w.append(x)}
     b.onclick=()=>{b.classList.add("loading");
+      onRobot=()=>{tx.hidden=false;t.textContent="收起";showNote(/429/.test(lastErr)?"他的 AI 声音今天的免费次数用完了，先看文字。明天再点就能听。":"AI 声音暂时出不来，先看文字，等一下再点试试。")};
       playVoice("v6-"+m.ts,m.text,S.profile.voice,()=>{b.classList.remove("loading");b.classList.add("playing");b.querySelector(".play").textContent="❚❚"},
         ()=>{b.classList.remove("playing","loading");b.querySelector(".play").textContent="▶"})};
     row.append(b);
@@ -1046,7 +1057,7 @@ document.addEventListener("visibilitychange",()=>{
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
-if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
+if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
 const BUILD="33";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
