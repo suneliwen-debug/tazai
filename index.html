@@ -330,7 +330,7 @@ const TYPES={
   uncle:{label:"成熟大叔",desc:"稳重包容，情绪稳定，像可以靠着的避风港。",style:"成熟稳重、温柔包容、有阅历，说话从容简洁，少用表情符号，偶尔宠溺地说她像个孩子。"},
   sunny:{label:"阳光型",desc:"开朗直球，爱分享日常，夸你从不吝啬。",style:"阳光开朗、直球、爱分享生活、很会夸她，语气轻快。"}
 };
-const LANGS={zh:"纯中文",mix:"中英混",my:"马来西亚口吻"};
+const LANGS={zh:"纯中文",mix:"中英混",my:"马来西亚华人口吻",ms:"马来文 Bahasa Melayu",en:"English"};
 const STAGES={crush:"暧昧期",love:"热恋",old:"老夫老妻"};
 const COLORS=["#d9577a","#5a6fd6","#2f8f7a","#c9832b","#7a4fb3","#3a3a46"];
 const SCENES={
@@ -841,7 +841,9 @@ function showChat(){
 /* ---------- prompts (kept short to save tokens) ---------- */
 function persona(){
   const p=S.profile,t=TYPES[p.type];
-  const lang={zh:"自然口语化的简体中文",mix:"中文为主，自然夹英文词，像新马年轻人聊天",my:"马来西亚华人口吻，自然夹 lah、meh、leh、马来语或英文词"}[p.lang];
+  const lang={zh:"自然口语化的简体中文",mix:"中文为主，自然夹英文词，像新马年轻人聊天",my:"马来西亚华人口吻，自然夹 lah、meh、leh、马来语或英文词",
+    ms:"全部用马来文（Bahasa Melayu）回复，像马来西亚年轻人发 WhatsApp 那样口语、随意，可以用 sayang、awak、tak、nak、je、kot、lah 这类日常说法和缩写；不要用中文",
+    en:"Reply only in casual English, like texting on WhatsApp; no Chinese"}[p.lang];
   return `你是${p.name}${p.job?"，"+p.job:""}，她的男朋友（年龄感：${p.age}）。你叫她“${p.you}”。关系：${STAGES[p.stage]}。
 性格：${t.style}坏度 ${p.bad}/5（1温柔，5很痞）。
 ${p.look?"你的长相："+p.look+"。\n":""}说话：${lang}；像真人发微信，短句口语；不说自己是AI，除非她认真问。你有自己的生活（工作、吃饭、运动、通勤、朋友），会自然分享。
@@ -884,8 +886,9 @@ function splitInline(arr){
   return out;
 }
 function looksBroken(t){
-  if(/(boyfriend|girlfriend|toxic|little fairy|persona|badness|rogue|bad boy|stage|same age|second generation|sarcastic|\d\s*\/\s*5|角色设定|人设|坏度\s*\d|关系阶段)/i.test(t))return true;
-  const p=S.profile||{};if(p.lang==="mix"||p.lang==="my")return false;
+  const p=S.profile||{};
+  if(/(toxic tongue|little fairy|persona|badness level|second generation|\d\s*\/\s*5\s*\(|角色设定|人设|坏度\s*\d|关系阶段)/i.test(t))return true;
+  if(p.lang!=="en"&&p.lang!=="ms"&&/(boyfriend|girlfriend|toxic|rogue|bad boy|same age|sarcastic)/i.test(t))return true;if(p.lang==="mix"||p.lang==="my"||p.lang==="ms"||p.lang==="en")return false;
   const letters=(t.match(/[A-Za-z]/g)||[]).length;return t.length>=6&&letters/t.length>0.35;
 }
 function clean(arr){
@@ -1026,7 +1029,7 @@ $("form").addEventListener("submit",e=>{
 });
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,recOn=false,base="";
 if(SR){
-  rec=new SR();rec.lang=S.profile&&S.profile.lang==="my"?"zh-MY":"zh-CN";rec.interimResults=true;rec.continuous=false;
+  rec=new SR();rec.lang=S.profile&&S.profile.lang==="ms"?"ms-MY":S.profile&&S.profile.lang==="en"?"en-US":S.profile&&S.profile.lang==="my"?"zh-MY":"zh-CN";rec.interimResults=true;rec.continuous=false;
   $("micBtn").hidden=false;
   rec.onresult=e=>{let s="";for(const r of e.results)s+=r[0].transcript;ta.value=base+s;ta.dispatchEvent(new Event("input"))};
   rec.onend=()=>{recOn=false;$("micBtn").classList.remove("on")};
@@ -1044,7 +1047,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="32";
+const BUILD="33";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
