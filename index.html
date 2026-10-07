@@ -470,7 +470,7 @@ function fillModels(){
   sel.value=CFG.model;
 }
 function fallbacks(){
-  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model&&!(CFG.bad||[]).includes(n));
+  const list=(CFG.models||[]).filter(n=>/flash/.test(n)&&n!==CFG.model&&!(CFG.bad||[]).includes(n)&&ver(n)>=3);
   const rank=n=>(/lite/.test(n)?1:0)+(/preview|exp/.test(n)?0.5:0);
   return list.sort((a,b)=>rank(a)-rank(b)).slice(0,3);
 }
@@ -479,7 +479,7 @@ async function gemini(system,text,opts={}){
   const tried=[CFG.model,...fallbacks()];let lastErr;
   for(let i=0;i<tried.length;i++){
     try{return await geminiOnce(tried[i],system,text,opts)}
-    catch(e){lastErr=e;if(!e.busy)throw e;if(i===0)await new Promise(r=>setTimeout(r,1500))}
+    catch(e){lastErr=e;if(!e.busy&&!e.gone)throw e;if(i===0&&e.busy)await new Promise(r=>setTimeout(r,1200))}
   }
   throw lastErr;
 }
@@ -505,9 +505,14 @@ async function geminiOnce(model,system,text,{max=500,json=true,retried=false,noT
     CFG.thinkMode[model]=(!cur&&gc.thinkingConfig.thinkingLevel==="minimal")?"low":"none";store(KKEY,CFG);
     return geminiOnce(model,system,text,{max,json,retried});
   }
-  if(r.status===404&&!retried){
+  if(r.status===404){
     const raw=(data&&data.error&&data.error.message)||"";
     CFG.bad=[...new Set([...(CFG.bad||[]),model])];
+    CFG.models=(CFG.models||[]).filter(n=>n!==model);store(KKEY,CFG);
+  }
+  if(r.status===404&&model!==CFG.model){const e=new Error("备用模型不能用");e.gone=true;throw e}
+  if(r.status===404&&!retried){
+    const raw=(data&&data.error&&data.error.message)||"";
     const sug=(raw.match(/use\s+models\/([\w.\-]+)/i)||[])[1];
     try{await discover()}catch(e){}
     if(sug&&!CFG.bad.includes(sug)){CFG.model=sug;store(KKEY,CFG);fillModels()}
@@ -767,7 +772,7 @@ document.addEventListener("visibilitychange",()=>{
 
 /* ---------- boot ---------- */
 if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
-const BUILD="16";
+const BUILD="17";
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
 fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.text():"").then(v=>{v=v.trim();
