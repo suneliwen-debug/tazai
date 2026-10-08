@@ -1020,7 +1020,7 @@ const FORMAT_BASE_F=()=>`只回 JSON：{"messages":[{"type":"text","text":"..."}
 inner：你此刻心里真正的想法，不会说出口的那种，一两句口语，可以跟嘴上说的相反（例如嘴硬但心里很在乎、偷偷吃醋、心动、担心她），要有画面感、有点可爱。
 type："text"文字；"voice"语音（text填口语的话，20到60字；${VFREQ()}；她叫你发语音、唱歌、说晚安早安时一定用语音）；"photo"分享你用手机拍的照片，带"prompt"、"scene"和"caption"：prompt 用英文写这张照片的画面（像真人随手拍：first-person phone photo, candid, natural light，写清楚地点、东西、光线、时间感；如果照片里有你自己，例如自拍或镜子自拍，要写出你的长相；不要文字、不要水印）；scene 从这里选一个最接近的：${Object.keys(SCENES).join(",")}；caption 是你配的一句话。分享日常时偶尔发，她叫你发照片、自拍时一定发。
 "sticker"表情包，带"sid"，只能从这里选：${Object.entries(STICKERS).map(([k,v])=>k+"("+v[1]+")").join(",")}；像真人一样偶尔用，常常放在一句话后面，或她发表情包时回一个。
-remember：这次值得长期记住的新事情，一句话：她透露的事实（生日、工作、喜好、家人、心情大事），或你们约好的安排、你答应她的事；没有就留空。`;
+remember：这次值得长期记住的新事情，一句话：她透露的事实（生日、工作、喜好、家人、心情大事）、你们约好的安排、你答应她的事；你们吵架或闹别扭时，要记下吵架的原因和经过；剧情里出现的重要人物（名字＋是谁）和重要事件也要记。没有就留空。`;
 function VFREQ(){return {low:"大约每5次回复用一次",mid:"大约每2到3次回复就用一次语音",high:"大部分回复都用语音，偶尔才打字",all:"每次回复都至少有一条语音，最好整段都用语音"}[CFG.vfreq||"low"]}
 function FMT(){
   const sc=albumScenes();
@@ -1066,7 +1066,7 @@ function clean(arr){
 }
 function remember(r){
   const s=r&&typeof r.remember==="string"?r.remember.trim():"";
-  if(s&&s.length<80&&!S.notes.some(n=>n.endsWith(s))){const d=new Date();S.notes.push(`（${d.getMonth()+1}月${d.getDate()}日记下）${s}`);S.notes=S.notes.slice(-20)}
+  if(s&&s.length<150&&!S.notes.some(n=>n.endsWith(s))){const d=new Date();S.notes.push(`（${d.getMonth()+1}月${d.getDate()}日记下）${s}`);S.notes=S.notes.slice(-40)}
 }
 async function deliver(list,opts={}){
   let first=true,i=0,first0=true;
@@ -1087,7 +1087,7 @@ async function reply(){
   for(let attempt=0;attempt<3&&!ok;attempt++){
     try{
       if(attempt)await new Promise(r=>setTimeout(r,attempt*2500));
-      const r=await chatAI(persona(),`${nowLine()}\n最近聊天：\n${transcript(24)}\n\n回复她刚才的消息（如果她连发了几句，一起回应）。${FMT()}`);
+      const r=await chatAI(persona(),`${nowLine()}\n最近聊天：\n${transcript(50)}\n\n回复她刚才的消息（如果她连发了几句，一起回应）。${FMT()}`);
       const list=clean(r.messages);if(!list.length){const e=new Error("回复内容不对");e.busy=true;throw e}
       const inner=typeof r.inner==="string"?r.inner.trim().slice(0,200):"";
       if(inner&&!looksBroken(inner))list[list.length-1].inner=inner;
@@ -1214,7 +1214,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="60";
+const BUILD="61";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
