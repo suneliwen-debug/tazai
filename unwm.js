@@ -112,12 +112,14 @@ function unWM(x, w, h, tpl, wm) {
     }
   }
   // 水印边缘的细线：用旁边的像素补
-  var band = new Uint8Array(rw * rh), r = Math.max(1, Math.round(pl.w / 600));
+  var band = new Uint8Array(rw * rh), r = Math.max(2, Math.round(pl.w / 250));
+  var PG = new Float32Array(rw * rh);
+  for (var yq = 0; yq < rh; yq++) for (var xq = 0; xq < rw; xq++) { var uq = (X0 + xq - pl.x) * sx, vq = (Y0 + yq - pl.y) * sy; PG[yq * rw + xq] = (wmSample(D, wm.tw, wm.th, uq, vq, 0) + wmSample(D, wm.tw, wm.th, uq, vq, 1) + wmSample(D, wm.tw, wm.th, uq, vq, 2)) / 765; }
   for (var y2 = 1; y2 < rh - 1; y2++) for (var x2 = 1; x2 < rw - 1; x2++) {
-    var j = y2 * rw + x2, g = Math.abs(A[j + 1] - A[j - 1]) + Math.abs(A[j + rw] - A[j - rw]);
+    var j = y2 * rw + x2, g = Math.abs(A[j + 1] - A[j - 1]) + Math.abs(A[j + rw] - A[j - rw]) + Math.abs(PG[j + 1] - PG[j - 1]) + Math.abs(PG[j + rw] - PG[j - rw]);
     if (g > 0.04) for (var by2 = -r; by2 <= r; by2++) for (var bx2 = -r; bx2 <= r; bx2++) { var yy3 = y2 + by2, xx3 = x2 + bx2; if (yy3 >= 0 && xx3 >= 0 && yy3 < rh && xx3 < rw) band[yy3 * rw + xx3] = 1; }
   }
-  var src = new Uint8ClampedArray(Dt), R2 = r + 2;
+  var src = new Uint8ClampedArray(Dt), R2 = r + 3;
   for (var y4 = 0; y4 < rh; y4++) for (var x4 = 0; x4 < rw; x4++) {
     var k4 = y4 * rw + x4; if (!band[k4]) continue;
     var s0 = 0, s1 = 0, s2 = 0, n4 = 0;
@@ -128,8 +130,38 @@ function unWM(x, w, h, tpl, wm) {
     }
     if (n4) { Dt[k4 * 4] = s0 / n4; Dt[k4 * 4 + 1] = s1 / n4; Dt[k4 * 4 + 2] = s2 / n4; }
   }
+  // 水印范围内轻微模糊，把剩下的边线糊掉
+  var tc = document.createElement('canvas'); tc.width = rw; tc.height = rh;
+  var tx = tc.getContext('2d'); tx.putImageData(im, 0, 0);
+  var bc = document.createElement('canvas'); bc.width = rw; bc.height = rh;
+  var bx = bc.getContext('2d'); bx.filter = 'blur(' + Math.max(1, pl.w / 300) + 'px)'; bx.drawImage(tc, 0, 0);
+  var B = bx.getImageData(0, 0, rw, rh).data, near = new Float32Array(rw * rh), R6 = Math.max(2, Math.round(pl.w / 250));
+  // 只在水印边线附近模糊（带状、边缘渐淡），平的地方不动
+  for (var y6 = 0; y6 < rh; y6++) for (var x6 = 0; x6 < rw; x6++) if (band[y6 * rw + x6]) {
+    for (var dy6 = -R6; dy6 <= R6; dy6++) for (var dx6 = -R6; dx6 <= R6; dx6++) {
+      var yy6 = y6 + dy6, xx6 = x6 + dx6; if (yy6 < 0 || xx6 < 0 || yy6 >= rh || xx6 >= rw) continue;
+      var d6 = 1 - Math.sqrt(dx6 * dx6 + dy6 * dy6) / (R6 + 1); if (d6 > near[yy6 * rw + xx6]) near[yy6 * rw + xx6] = d6;
+    }
+  }
+  for (var k5 = 0; k5 < rw * rh; k5++) {
+    var wgt = near[k5]; if (wgt <= 0) continue;
+    for (var c5 = 0; c5 < 3; c5++) Dt[k5 * 4 + c5] = Dt[k5 * 4 + c5] * (1 - wgt) + B[k5 * 4 + c5] * wgt;
+  }
   x.putImageData(im, X0, Y0);
-  return pl.r;
+  return pl;
+}
+function wmCover(x, pl, text) {
+  // 在朋友水印的位置盖上自己的大水印
+  var t = String(text || 'Malaysia Lelong House · 013-631 3192').split(/\s*[·|]\s*/).filter(Boolean);
+  var F = '"Helvetica Neue",Arial,"PingFang SC","Noto Sans SC",sans-serif', fs = Math.round(pl.w * 0.085);
+  x.save(); x.font = '800 ' + fs + 'px ' + F;
+  var mw = 0; t.forEach(function (s) { mw = Math.max(mw, x.measureText(s).width); });
+  if (mw > pl.w * 0.95) { fs = Math.floor(fs * pl.w * 0.95 / mw); x.font = '800 ' + fs + 'px ' + F; }
+  var lh = fs * 1.25, cx = pl.x + pl.w * 0.48, cy = pl.y + pl.h * 0.45 - (t.length - 1) * lh / 2;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.globalAlpha = 0.82; x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = Math.max(3, fs * 0.25); x.fillStyle = '#fff';
+  t.forEach(function (s, i) { x.fillText(s, cx, cy + i * lh); });
+  x.restore();
 }
 function wmConfidence(canvas, w, h, tpl, wm, pl) {
   // 跟旁边错开的位置比：真的水印位置会明显比较好
