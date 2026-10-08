@@ -7,7 +7,7 @@ function myWM(x, w, h, logo) {
   if (logo) {
     var s = Math.round(m * (FRWM.pos === 'c' ? 0.45 : 0.2)), lw = s, lh = Math.round(s * logo.naturalHeight / logo.naturalWidth);
     var lx = FRWM.pos === 'br' ? w - pad - lw : (w - lw) / 2, ly = FRWM.pos === 'c' ? (h - lh) / 2 : h - pad - lh;
-    x.save(); x.globalAlpha = FRWM.pos === 'c' ? 0.6 : 0.95; x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = Math.max(2, s * 0.04);
+    x.save(); x.globalAlpha = FRWM.pos === 'c' ? 0.4 : 0.6;
     x.drawImage(logo, lx, ly, lw, lh); x.restore();
     if (t && FRWM.pos !== 'c') {
       var fs = Math.max(12, Math.round(m * 0.03)); x.save(); x.font = '700 ' + fs + 'px ' + F; x.textAlign = 'right'; x.textBaseline = 'middle';
@@ -24,8 +24,9 @@ function myWM(x, w, h, logo) {
 function coverLogo(x, pl, logo) {
   // 在朋友水印的位置盖上我的大 logo
   if (!logo) return wmCover(x, pl, FRWM.text);
-  var s = pl.w * 0.62, lh = s * logo.naturalHeight / logo.naturalWidth, cx = pl.x + pl.w * 0.48, cy = pl.y + pl.h * 0.45;
-  x.save(); x.globalAlpha = 0.88; x.shadowColor = 'rgba(0,0,0,.3)'; x.shadowBlur = Math.max(3, s * 0.03);
+  // 跟朋友水印一样大、一样位置，半透明
+  var s = Math.max(pl.w, pl.h) * 0.92, lh = s * logo.naturalHeight / logo.naturalWidth, cx = pl.x + pl.w * 0.49, cy = pl.y + pl.h * 0.5;
+  x.save(); x.globalAlpha = 0.42;
   x.drawImage(logo, cx - s / 2, cy - lh / 2, s, lh); x.restore();
 }
 function frProcess(p, i) {
