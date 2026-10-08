@@ -27,49 +27,76 @@ function wmEdges(G, w, h) {
   }
   return E;
 }
-function wmRefine(x, w, h, D, wm, pl) {
-  // 在小图上用边缘相关找最准的位置和大小
-  var f = Math.min(1, 260 / pl.w), sw = Math.round(w * f), sh = Math.round(h * f);
-  var c = document.createElement('canvas'); c.width = sw; c.height = sh;
-  var cx = c.getContext('2d'); cx.drawImage(x.canvas, 0, 0, sw, sh);
-  var d = cx.getImageData(0, 0, sw, sh).data, G = new Float32Array(sw * sh);
-  for (var i = 0; i < sw * sh; i++) G[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
-  var EI = wmEdges(G, sw, sh);
-  var best = { s: 1, dx: 0, dy: 0, v: -1e9 };
-  var scales = [0.96, 0.98, 1, 1.02, 1.04], R = 0.04;
-  scales.forEach(function (s) {
-    var tw = Math.round(pl.w * f * s), th = Math.round(pl.h * f * s);
-    if (tw < 20 || th < 20) return;
-    var TG = new Float32Array(tw * th);
-    for (var yy = 0; yy < th; yy++) for (var xx = 0; xx < tw; xx++) {
-      var u = xx / tw * wm.tw, v = yy / th * wm.th;
-      TG[yy * tw + xx] = (wmSample(D, wm.tw, wm.th, u, v, 0) + wmSample(D, wm.tw, wm.th, u, v, 1) + wmSample(D, wm.tw, wm.th, u, v, 2)) / 3;
+function wmGray(src, sx, sy, sw, sh, w, h) {
+  var c = document.createElement('canvas'); c.width = w; c.height = h;
+  var x = c.getContext('2d'); x.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+  var d = x.getImageData(0, 0, w, h).data, G = new Float32Array(w * h);
+  for (var i = 0; i < w * h; i++) G[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+  return G;
+}
+function wmTplPts(tpl, wm, tw, th, maxPts) {
+  // 模板缩到 tw×th，找水印边缘的点（和右边/下面邻居差很多的地方）
+  var P = wmGray(tpl, 0, 0, wm.tw, wm.th, tw, th), A = wmGray(tpl, 0, wm.th, wm.tw, wm.th, tw, th);
+  for (var i = 0; i < A.length; i++) A[i] /= 255;
+  var pts = [];
+  for (var y = 0; y < th - 1; y++) for (var x = 0; x < tw - 1; x++) {
+    var k = y * tw + x;
+    if (Math.abs(A[k + 1] - A[k]) + Math.abs(P[k + 1] - P[k]) / 255 > 0.06) pts.push([y, x, 0, 1]);
+    if (Math.abs(A[k + tw] - A[k]) + Math.abs(P[k + tw] - P[k]) / 255 > 0.06) pts.push([y, x, 1, 0]);
+  }
+  if (pts.length > maxPts) { var step = pts.length / maxPts, q = []; for (var j = 0; j < maxPts; j++) q.push(pts[Math.floor(j * step)]); pts = q; }
+  return pts.map(function (p) { var k1 = p[0] * tw + p[1], k2 = (p[0] + p[2]) * tw + p[1] + p[3]; return [p[0], p[1], p[2], p[3], P[k1], P[k2], Math.min(0.9, A[k1]), Math.min(0.9, A[k2])]; });
+}
+function wmRatio(G, sw, sh, pts, X0, Y0) {
+  // 去水印后边缘变弱多少：越小越对
+  var num = 0, den = 0, n = 0;
+  for (var q = 0; q < pts.length; q++) {
+    var p = pts[q], y = Y0 + p[0], x = X0 + p[1], y2 = y + p[2], x2 = x + p[3];
+    if (x < 0 || y < 0 || x2 >= sw || y2 >= sh) continue;
+    var i1 = G[y * sw + x], i2 = G[y2 * sw + x2];
+    num += Math.abs((i2 - p[5]) / (1 - p[7]) - (i1 - p[4]) / (1 - p[6])); den += Math.abs(i2 - i1); n++;
+  }
+  return n < pts.length * 0.7 ? 9 : (num + 1) / (den + 1);
+}
+function wmFind(canvas, w, h, tpl, wm) {
+  var ar = wm.oh / wm.ow;
+  // 第一轮：最长边 200px，整张图找，大小 30%–125% 图宽
+  var f1 = 200 / Math.max(w, h), sw = Math.max(8, Math.round(w * f1)), sh = Math.max(8, Math.round(h * f1));
+  var G = wmGray(canvas, 0, 0, w, h, sw, sh), best = { r: 9 };
+  for (var fr = 0.3; fr <= 1.25; fr *= 1.06) {
+    var tw = Math.round(sw * fr), th = Math.round(tw * ar);
+    if (tw < 16 || th > sh * 1.3) continue;
+    var pts = wmTplPts(tpl, wm, tw, th, 500);
+    if (pts.length < 20) continue;
+    var cand = { r: 9 };
+    for (var Y0 = Math.round(-th / 4); Y0 <= sh - th * 0.75; Y0 += 2) for (var X0 = Math.round(-tw / 4); X0 <= sw - tw * 0.75; X0 += 2) {
+      var r = wmRatio(G, sw, sh, pts, X0, Y0);
+      if (r < cand.r) cand = { r: r, X: X0, Y: Y0 };
     }
-    var ET = wmEdges(TG, tw, th), idx = [], tm = 0;
-    for (var k = 0; k < ET.length; k++) if (ET[k] > 4) { idx.push(k); tm += ET[k]; }
-    if (!idx.length) return;
-    tm /= idx.length;
-    var bx = (pl.x + pl.w / 2) * f - tw / 2, by = (pl.y + pl.h / 2) * f - th / 2, st = Math.max(1, Math.round(R * tw / 6));
-    for (var oy = -6; oy <= 6; oy++) for (var ox = -6; ox <= 6; ox++) {
-      var X0 = Math.round(bx + ox * st), Y0 = Math.round(by + oy * st), sum = 0, si = 0, sii = 0, n = 0;
-      for (var q = 0; q < idx.length; q++) {
-        var k2 = idx[q], ty = (k2 / tw) | 0, tx = k2 - ty * tw, X = X0 + tx, Y = Y0 + ty;
-        if (X < 0 || Y < 0 || X >= sw || Y >= sh) continue;
-        var e = EI[Y * sw + X], t = ET[k2] - tm;
-        sum += e * t; si += e; sii += e * e; n++;
-      }
-      if (n < idx.length * 0.6) continue;
-      var mean = si / n, vr = Math.sqrt(Math.max(1e-6, sii / n - mean * mean));
-      var score = (sum / n) / vr;
-      if (score > best.v) best = { s: s, dx: X0 / f, dy: Y0 / f, v: score, tw: tw / f, th: th / f };
+    if (cand.r >= 9) continue;
+    for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+      var r2 = wmRatio(G, sw, sh, pts, cand.X + ox, cand.Y + oy);
+      if (r2 < best.r) best = { r: r2, x: (cand.X + ox) / f1, y: (cand.Y + oy) / f1, w: tw / f1, h: th / f1 };
     }
-  });
-  if (best.v < -1e8) return pl;
-  return { x: best.dx, y: best.dy, w: best.tw, h: best.th };
+  }
+  if (best.r >= 9) return null;
+  // 第二轮：水印约 450px 宽，附近细找
+  var f2 = Math.min(1, 450 / best.w), sw2 = Math.round(w * f2), sh2 = Math.round(h * f2);
+  var G2 = wmGray(canvas, 0, 0, w, h, sw2, sh2), b2 = { r: 9 }, R = Math.max(2, Math.round(1.5 * f2 / f1));
+  for (var s = 0.96; s <= 1.041; s += 0.01) {
+    var tw2 = Math.round(best.w * f2 * s), th2 = Math.round(tw2 * ar), pts2 = wmTplPts(tpl, wm, tw2, th2, 900);
+    var cx = (best.x + best.w / 2) * f2, cy = (best.y + best.h / 2) * f2;
+    for (var oy2 = -R; oy2 <= R; oy2++) for (var ox2 = -R; ox2 <= R; ox2++) {
+      var X1 = Math.round(cx - tw2 / 2 + ox2), Y1 = Math.round(cy - th2 / 2 + oy2), r3 = wmRatio(G2, sw2, sh2, pts2, X1, Y1);
+      if (r3 < b2.r) b2 = { r: r3, x: X1 / f2, y: Y1 / f2, w: tw2 / f2, h: th2 / f2 };
+    }
+  }
+  return b2.r < 9 ? b2 : null;
 }
 function unWM(x, w, h, tpl, wm) {
   var D = wmTplData(tpl, wm);
-  var pl = wmRefine(x, w, h, D, wm, wmPlace(w, h, wm));
+  var pl = wmFind(x.canvas, w, h, tpl, wm);
+  if (!pl || pl.r > (wm.maxRatio || 2.5)) return false;
   var X0 = Math.max(0, Math.floor(pl.x)), Y0 = Math.max(0, Math.floor(pl.y)), X1 = Math.min(w, Math.ceil(pl.x + pl.w)), Y1 = Math.min(h, Math.ceil(pl.y + pl.h));
   if (X1 <= X0 || Y1 <= Y0) return;
   var rw = X1 - X0, rh = Y1 - Y0, im = x.getImageData(X0, Y0, rw, rh), Dt = im.data;
@@ -102,4 +129,5 @@ function unWM(x, w, h, tpl, wm) {
     if (n4) { Dt[k4 * 4] = s0 / n4; Dt[k4 * 4 + 1] = s1 / n4; Dt[k4 * 4 + 2] = s2 / n4; }
   }
   x.putImageData(im, X0, Y0);
+  return pl.r;
 }
