@@ -27,22 +27,22 @@ function wmEdges(G, w, h) {
   }
   return E;
 }
-function wmGray(src, sx, sy, sw, sh, w, h) {
+function wmGray(src, sx, sy, sw, sh, w, h, blur) {
   var c = document.createElement('canvas'); c.width = w; c.height = h;
-  var x = c.getContext('2d'); x.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
+  var x = c.getContext('2d'); if (blur) x.filter = 'blur(' + blur + 'px)'; x.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
   var d = x.getImageData(0, 0, w, h).data, G = new Float32Array(w * h);
   for (var i = 0; i < w * h; i++) G[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
   return G;
 }
 function wmTplPts(tpl, wm, tw, th, maxPts) {
   // 模板缩到 tw×th，找水印边缘的点（和右边/下面邻居差很多的地方）
-  var P = wmGray(tpl, 0, 0, wm.tw, wm.th, tw, th), A = wmGray(tpl, 0, wm.th, wm.tw, wm.th, tw, th);
+  var P = wmGray(tpl, 0, 0, wm.tw, wm.th, tw, th, 0.7), A = wmGray(tpl, 0, wm.th, wm.tw, wm.th, tw, th, 0.7);
   for (var i = 0; i < A.length; i++) A[i] /= 255;
   var pts = [];
-  for (var y = 0; y < th - 1; y++) for (var x = 0; x < tw - 1; x++) {
+  for (var y = 0; y < th - 2; y++) for (var x = 0; x < tw - 2; x++) {
     var k = y * tw + x;
-    if (Math.abs(A[k + 1] - A[k]) + Math.abs(P[k + 1] - P[k]) / 255 > 0.06) pts.push([y, x, 0, 1]);
-    if (Math.abs(A[k + tw] - A[k]) + Math.abs(P[k + tw] - P[k]) / 255 > 0.06) pts.push([y, x, 1, 0]);
+    if (Math.abs(A[k + 2] - A[k]) + Math.abs(P[k + 2] - P[k]) / 255 > 0.06) pts.push([y, x, 0, 2]);
+    if (Math.abs(A[k + 2 * tw] - A[k]) + Math.abs(P[k + 2 * tw] - P[k]) / 255 > 0.06) pts.push([y, x, 2, 0]);
   }
   if (pts.length > maxPts) { var step = pts.length / maxPts, q = []; for (var j = 0; j < maxPts; j++) q.push(pts[Math.floor(j * step)]); pts = q; }
   return pts.map(function (p) { var k1 = p[0] * tw + p[1], k2 = (p[0] + p[2]) * tw + p[1] + p[3]; return [p[0], p[1], p[2], p[3], P[k1], P[k2], Math.min(0.9, A[k1]), Math.min(0.9, A[k2])]; });
@@ -61,7 +61,7 @@ function wmRatio(G, sw, sh, pts, X0, Y0) {
 function wmFind(canvas, w, h, tpl, wm) {
   var ar = wm.oh / wm.ow;
   // 第一轮：最长边 200px，整张图找，大小 30%–125% 图宽
-  var f1 = 200 / Math.max(w, h), sw = Math.max(8, Math.round(w * f1)), sh = Math.max(8, Math.round(h * f1));
+  var f1 = 240 / Math.max(w, h), sw = Math.max(8, Math.round(w * f1)), sh = Math.max(8, Math.round(h * f1));
   var G = wmGray(canvas, 0, 0, w, h, sw, sh), best = { r: 9 };
   for (var fr = 0.3; fr <= 1.25; fr *= 1.06) {
     var tw = Math.round(sw * fr), th = Math.round(tw * ar);
@@ -130,4 +130,14 @@ function unWM(x, w, h, tpl, wm) {
   }
   x.putImageData(im, X0, Y0);
   return pl.r;
+}
+function wmConfidence(canvas, w, h, tpl, wm, pl) {
+  // 跟旁边错开的位置比：真的水印位置会明显比较好
+  var f = Math.min(1, 300 / pl.w), sw = Math.round(w * f), sh = Math.round(h * f), G = wmGray(canvas, 0, 0, w, h, sw, sh);
+  var tw = Math.round(pl.w * f), th = Math.round(pl.h * f), pts = wmTplPts(tpl, wm, tw, th, 600), X = Math.round(pl.x * f), Y = Math.round(pl.y * f);
+  var r0 = wmRatio(G, sw, sh, pts, X, Y), rs = [], d = Math.max(3, Math.round(tw * 0.04));
+  [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [-d, -d], [d, -d], [-d, d]].forEach(function (o) { var r = wmRatio(G, sw, sh, pts, X + o[0], Y + o[1]); if (r < 9) rs.push(r); });
+  if (!rs.length) return 0;
+  rs.sort(function (a, b) { return a - b; });
+  return rs[Math.floor(rs.length / 2)] / r0;
 }
