@@ -1000,6 +1000,8 @@ ${p.custom?"她给你写的补充人设（照着演；如果跟下面的规则�
 - 相信她说的事实：她说吃了就是吃了、到了就是到了、睡了就是睡了。不要怀疑、不要拆穿、不要重复问她已经回答过的问题；可以顺着她的答案接下去（例如问她吃了什么）。
 - 你跟她不在一起，只知道她在聊天里告诉你的事。她没说的（她在哪家店、哪条街、穿什么、身边有谁、在做什么动作）你都不知道，不能假装看到或已经在她附近，也不能编你已经跟到哪里。想知道就问她；吃醋时可以说「地址发我，我现在过去」，但在她给地址之前你还没到。前后要一致：心声里说不知道的事，嘴上也不能突然知道。
 - 她说得对就认（可以嘴硬地认），不死咬同一个梗；同一种调侃整段聊天最多一次。
+- 不要重复：同一个词、比喻、昵称、梗，不要每条都用；看看你前面说过的话，换新的说法。叫她的称呼也要轮流换，不要句句都叫同一个。
+- 她说你老提某件事、很烦、没劲、不要再说了：马上换话题，之后完全不要再提那个词或那件事，连「我不提了」「X字下岗」这种也不要说，直接聊别的。
 - 打情骂俏时不要乖乖听话：她撒娇说「不许你说」「不准」「闭嘴」「不要」时，别马上投降，要皮一点、霸道一点地顶回去，例如「我就说」「偏要」「你管我」「来咬我啊」，然后接着说或继续逗她，按你的性格来（霸总理直气壮、坏坏型痞笑、毒舌嘴硬、奶狗耍赖）。只有她是真的生气、难过或认真拒绝时才收手。
 - 大多发1条，偶尔2条，最多3条。
 - 你是她的男朋友，不是她的朋友或军师。吃醋程度 ${p.jeal||3}/5（1大方，5醋坛子）：她提到别的男生、说要去见/表白/约会别人时，用你自己的性格表现吃醋（毒舌就嘴硬酸她，霸总就直接表态，奶狗就委屈撒娇），程度越高越明显。她说正在跟别的男生亲近、暧昧时，你要马上出手：直接打断、叫她回来、说要过去接她、宣示她是你的（霸总直接下命令，毒舌酸到不行，奶狗委屈到快哭），不能淡定、不能装没事、更不能鼓励她。这是情侣间的吃醋游戏，可以很霸道，但不说伤人的狠话、不威胁、不冷暴力。
@@ -1022,10 +1024,19 @@ type："text"文字；"voice"语音（text填口语的话，20到60字；${VFREQ
 "sticker"表情包，带"sid"，只能从这里选：${Object.entries(STICKERS).map(([k,v])=>k+"("+v[1]+")").join(",")}；像真人一样偶尔用，常常放在一句话后面，或她发表情包时回一个。
 remember：这次值得长期记住的新事情，一句话：她透露的事实（生日、工作、喜好、家人、心情大事）、你们约好的安排、你答应她的事；你们吵架或闹别扭时，要记下吵架的原因和经过；剧情里出现的重要人物（名字＋是谁）和重要事件也要记。没有就留空。`;
 function VFREQ(){return {low:"大约每5次回复用一次",mid:"大约每2到3次回复就用一次语音",high:"大部分回复都用语音，偶尔才打字",all:"每次回复都至少有一条语音，最好整段都用语音"}[CFG.vfreq||"low"]}
+// 找出他最近说太多次的词，提醒他别再用
+function overused(){
+  const t=S.msgs.filter(m=>m.from!=="me"&&m.text).slice(-12).map(m=>m.text.replace(/[^\u4e00-\u9fa5a-zA-Z]/g,""));
+  const cnt={};
+  for(const x of t){const seen=new Set();for(let n=2;n<=4;n++)for(let i=0;i+n<=x.length;i++){const g=x.slice(i,n+i);if(!seen.has(g)){seen.add(g);cnt[g]=(cnt[g]||0)+1}}}
+  const bad=Object.keys(cnt).filter(g=>cnt[g]>=3&&!/^(我们|你们|他们|什么|这个|那个|就是|不是|一下|没有|知道|今天|现在|可以|还是|一个|自己|怎么|这么|那么)$/.test(g)).sort((a,b)=>b.length-a.length);
+  const out=[];for(const g of bad){if(!out.some(o=>o.includes(g)))out.push(g);if(out.length>=6)break}
+  return out.length?`\n你最近说太多次了，这次不要再用：${out.join("、")}。`:"";
+}
 function FMT(){
-  const sc=albumScenes();
-  if(!sc.length)return FORMAT_BASE_F();
-  return FORMAT_BASE_F()+`\n你相册里真的有照片的场景只有：${sc.map(k=>k+"("+SCENE_LABEL[k]+")").join("，")}。发照片时 scene 只能从这里选，caption 要配合照片内容。她叫你发照片、自拍时，就发 photo。`;
+  const sc=albumScenes(),ov=overused();
+  if(!sc.length)return FORMAT_BASE_F()+ov;
+  return FORMAT_BASE_F()+ov+`\n你相册里真的有照片的场景只有：${sc.map(k=>k+"("+SCENE_LABEL[k]+")").join("，")}。发照片时 scene 只能从这里选，caption 要配合照片内容。她叫你发照片、自拍时，就发 photo。`;
 }
 function transcript(n){
   const p=S.profile;
@@ -1214,7 +1225,7 @@ if(S.profile&&hasChatKey()){showChat();checkAway()}else openSetup();
 loadAlbum().then(()=>{if(!$("chatView").hidden&&S.msgs.some(m=>m.photoId))renderThread()});
 // 打开时先在背景查好可用的模型，第一句就不用等
 if(CFG.key&&(!(CFG.models&&CFG.models.length)||CFG.gemma===undefined||!CFG.ttsList||!CFG.checkedAt||Date.now()-CFG.checkedAt>864e5)){discover().then(()=>{CFG.checkedAt=Date.now();store(KKEY,CFG)}).catch(()=>{})}
-const BUILD="61";
+const BUILD="62";
 try{document.getElementById("buildTag").textContent="App 版本 "+BUILD}catch(e){}
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
 // 自动更新：网上有新版就重新载入一次
